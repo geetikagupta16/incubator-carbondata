@@ -15,7 +15,8 @@
  * KIND, either express or implied.  See the License for the
  * specific language governing permissions and limitations
  * under the License.
- */
+ *//*
+
 package org.apache.carbondata.lcm.locks;
 
 import java.io.File;
@@ -36,16 +37,20 @@ import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 
+*/
 /**
  * @author Administrator
- */
+ *//*
+
 public class ZooKeeperLockingTest {
 
   int freePort;
 
-  /**
+  */
+/**
    * @throws java.lang.Exception
-   */
+   *//*
+
   @Before public void setUp() throws Exception {
     Properties startupProperties = new Properties();
     startupProperties.setProperty("dataDir", (new File("./target").getAbsolutePath()));
@@ -73,9 +78,11 @@ public class ZooKeeperLockingTest {
     }.start();
   }
 
-  /**
+  */
+/**
    * @throws java.lang.Exception
-   */
+   *//*
+
   @After public void tearDown() throws Exception {
   }
 
@@ -110,11 +117,13 @@ public class ZooKeeperLockingTest {
     Assert.assertTrue(zk2.unlock());
   }
 
-  /**
+  */
+/**
    * For finding the free port available.
    *
    * @return
-   */
+   *//*
+
   private static int findFreePort() {
     ServerSocket socket = null;
     try {
@@ -141,3 +150,4 @@ public class ZooKeeperLockingTest {
     return 2181;
   }
 }
+*/
