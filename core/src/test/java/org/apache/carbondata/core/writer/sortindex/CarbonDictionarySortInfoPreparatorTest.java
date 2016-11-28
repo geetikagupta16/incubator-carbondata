@@ -26,15 +26,28 @@ import org.apache.carbondata.core.cache.dictionary.DictionaryChunksWrapper;
 import org.apache.carbondata.core.carbon.metadata.datatype.DataType;
 import org.apache.carbondata.core.util.CarbonUtilException;
 
+import org.junit.BeforeClass;
 import org.junit.Test;
 
 import static org.junit.Assert.assertTrue;
 
+/**
+ * The class tests the CarbonDictionarySortInfoPreparator class that prepares the column sort info ie sortIndex
+ * and inverted sort index info
+ */
 public class CarbonDictionarySortInfoPreparatorTest {
 
-  private CarbonDictionarySortInfoPreparator carbonDictionarySortInfoPreparator =
-      new CarbonDictionarySortInfoPreparator();
+  private static CarbonDictionarySortInfoPreparator carbonDictionarySortInfoPreparator = null;
 
+  @BeforeClass public static void setUp() {
+    carbonDictionarySortInfoPreparator = new CarbonDictionarySortInfoPreparator();
+  }
+
+  /**
+   * Tests the getDictionarySortInfo method
+   *
+   * @throws CarbonUtilException
+   */
   @Test public void testGetDictionarySortInfo() throws CarbonUtilException {
 
     List<String> newDistinctValues = new ArrayList<>();
@@ -75,10 +88,19 @@ public class CarbonDictionarySortInfoPreparatorTest {
     };
     CarbonDictionarySortInfo carbonDictionarySortInfo = carbonDictionarySortInfoPreparator
         .getDictionarySortInfo(newDistinctValues, dictionary, DataType.ARRAY);
-    assertTrue(carbonDictionarySortInfo.getSortIndex().get(0) == 1);
-    assertTrue(carbonDictionarySortInfo.getSortIndexInverted().size() == 3);
+    int expectedGetSortIndexValue = 1;
+    int expectedGetSortInvertedIndexLength = 3;
+    int actualGetSortIndexValue = carbonDictionarySortInfo.getSortIndex().get(0);
+    int actualGetSortInvertedIndexLength = carbonDictionarySortInfo.getSortIndexInverted().size();
+    assertTrue(actualGetSortIndexValue == expectedGetSortIndexValue);
+    assertTrue(actualGetSortInvertedIndexLength == expectedGetSortInvertedIndexLength);
   }
 
+  /**
+   * Tests getDictionarySortInfo when dictionary is null
+   *
+   * @throws CarbonUtilException
+   */
   @Test public void testGetDictionarySortInfoDictionaryNullCase() throws CarbonUtilException {
 
     List<String> newDistinctValues = new ArrayList<>();
@@ -87,9 +109,12 @@ public class CarbonDictionarySortInfoPreparatorTest {
     Dictionary dictionary = null;
     CarbonDictionarySortInfo carbonDictionarySortInfo = carbonDictionarySortInfoPreparator
         .getDictionarySortInfo(newDistinctValues, dictionary, DataType.ARRAY);
-    assertTrue(carbonDictionarySortInfo.getSortIndex().get(0) == 1);
-    assertTrue(carbonDictionarySortInfo.getSortIndexInverted().size() == 2);
-
+    int expectedGetSortIndexValue = 1;
+    int expectedGetSortInvertedIndexLength = 2;
+    int actualGetSortIndexValue = carbonDictionarySortInfo.getSortIndex().get(0);
+    int actualGetSortInvertedIndexLength = carbonDictionarySortInfo.getSortIndexInverted().size();
+    assertTrue(actualGetSortIndexValue == expectedGetSortIndexValue);
+    assertTrue(actualGetSortInvertedIndexLength == expectedGetSortInvertedIndexLength);
   }
 
 }
