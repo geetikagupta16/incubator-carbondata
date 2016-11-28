@@ -25,58 +25,74 @@ import org.junit.Test;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
+/**
+ * This class tests the Dictionary sort model class that holds the member byte value and corresponding key value.
+ */
 public class CarbonDictionarySortModelTest {
 
-  private CarbonDictionarySortModel carbonDictionarySortModel;
+  private CarbonDictionarySortModel carbonDictionarySortModel = null;
 
   @Test public void testCompareToForDataTypeDoubleCase() {
     carbonDictionarySortModel = new CarbonDictionarySortModel(1, DataType.DOUBLE, "7234");
     CarbonDictionarySortModel testCarbonDictionarySortModel =
         new CarbonDictionarySortModel(2, DataType.DOUBLE, "5678");
-    assertTrue(carbonDictionarySortModel.compareTo(testCarbonDictionarySortModel) == 1);
+    int expectedResult = 1;
+    int actualResult = carbonDictionarySortModel.compareTo(testCarbonDictionarySortModel);
+    assertTrue(actualResult == expectedResult);
   }
 
   @Test public void testCompareToForDataTypeDoubleExceptionCase() {
     carbonDictionarySortModel = new CarbonDictionarySortModel(1, DataType.DOUBLE, "double");
     CarbonDictionarySortModel testCarbonDictionarySortModel =
         new CarbonDictionarySortModel(2, DataType.DOUBLE, "@NU#LL$!");
-    System.out.println(carbonDictionarySortModel.compareTo(testCarbonDictionarySortModel));
-    assertTrue(carbonDictionarySortModel.compareTo(testCarbonDictionarySortModel) == -1);
+    int expectedResult = -1;
+    int actualResult = carbonDictionarySortModel.compareTo(testCarbonDictionarySortModel);
+    assertTrue(actualResult == expectedResult);
   }
 
   @Test public void testCompareToForDataTypeDoubleExceptionCaseForOtherObject() {
     carbonDictionarySortModel = new CarbonDictionarySortModel(1, DataType.DOUBLE, "1234");
     CarbonDictionarySortModel testCarbonDictionarySortModel =
         new CarbonDictionarySortModel(2, DataType.DOUBLE, "@NU#LL$!");
-    assertTrue(carbonDictionarySortModel.compareTo(testCarbonDictionarySortModel) == -1);
+    int expectedResult = -1;
+    int actualResult = carbonDictionarySortModel.compareTo(testCarbonDictionarySortModel);
+    assertTrue(actualResult == expectedResult);
   }
 
   @Test public void testCompareToForDataTypeBooleanCase() {
     carbonDictionarySortModel = new CarbonDictionarySortModel(1, DataType.BOOLEAN, "memberValue");
     CarbonDictionarySortModel testCarbonDictionarySortModel =
         new CarbonDictionarySortModel(2, DataType.DOUBLE, "value");
-    assertTrue(carbonDictionarySortModel.compareTo(testCarbonDictionarySortModel) == -9);
+    int expectedResult = -9;
+    int actualResult = carbonDictionarySortModel.compareTo(testCarbonDictionarySortModel);
+    assertTrue(actualResult == expectedResult);
   }
 
   @Test public void testCompareToForDataTypeDecimalCase() {
     carbonDictionarySortModel = new CarbonDictionarySortModel(1, DataType.DECIMAL, "72.34");
     CarbonDictionarySortModel testCarbonDictionarySortModel =
         new CarbonDictionarySortModel(2, DataType.DECIMAL, "56.78");
-    assertTrue(carbonDictionarySortModel.compareTo(testCarbonDictionarySortModel) == 1);
+    int expectedResult = 1;
+    int actualResult = carbonDictionarySortModel.compareTo(testCarbonDictionarySortModel);
+    assertTrue(actualResult == expectedResult);
   }
 
   @Test public void testCompareToForDataTypeDecimalExceptionCase() {
     carbonDictionarySortModel = new CarbonDictionarySortModel(1, DataType.DECIMAL, "decimal");
     CarbonDictionarySortModel testCarbonDictionarySortModel =
         new CarbonDictionarySortModel(2, DataType.DECIMAL, "@NU#LL$!");
-    assertTrue(carbonDictionarySortModel.compareTo(testCarbonDictionarySortModel) == -1);
+    int expectedResult = -1;
+    int actualResult = carbonDictionarySortModel.compareTo(testCarbonDictionarySortModel);
+    assertTrue(actualResult == expectedResult);
   }
 
   @Test public void testCompareToForDataTypeDecimalExceptionCaseForOtherObject() {
     carbonDictionarySortModel = new CarbonDictionarySortModel(1, DataType.DECIMAL, "15.24");
     CarbonDictionarySortModel testCarbonDictionarySortModel =
         new CarbonDictionarySortModel(2, DataType.DECIMAL, "@NU#LL$!");
-    assertTrue(carbonDictionarySortModel.compareTo(testCarbonDictionarySortModel) == -1);
+    int expectedResult = -1;
+    int actualResult = carbonDictionarySortModel.compareTo(testCarbonDictionarySortModel);
+    assertTrue(actualResult == expectedResult);
   }
 
   @Test public void testCompareToForDataTypeTimestampCase() {
@@ -84,7 +100,9 @@ public class CarbonDictionarySortModelTest {
         new CarbonDictionarySortModel(1, DataType.TIMESTAMP, "2014-09-22 12:00:00");
     CarbonDictionarySortModel testCarbonDictionarySortModel =
         new CarbonDictionarySortModel(2, DataType.TIMESTAMP, "2015-09-22 12:08:49");
-    assertTrue(carbonDictionarySortModel.compareTo(testCarbonDictionarySortModel) == -1);
+    int expectedResult = -1;
+    int actualResult = carbonDictionarySortModel.compareTo(testCarbonDictionarySortModel);
+    assertTrue(actualResult == expectedResult);
   }
 
   @Test public void testCompareToForDataTypeTimestampExceptionCase() {
@@ -92,7 +110,9 @@ public class CarbonDictionarySortModelTest {
         new CarbonDictionarySortModel(1, DataType.TIMESTAMP, "2014-09 12:00:00");
     CarbonDictionarySortModel testCarbonDictionarySortModel =
         new CarbonDictionarySortModel(2, DataType.TIMESTAMP, "@NU#LL$!");
-    assertTrue(carbonDictionarySortModel.compareTo(testCarbonDictionarySortModel) == -1);
+    int expectedResult = -1;
+    int actualResult = carbonDictionarySortModel.compareTo(testCarbonDictionarySortModel);
+    assertTrue(actualResult == expectedResult);
   }
 
   @Test public void testCompareToForDataTypeTimestampExceptionCaseForOtherObject() {
@@ -100,38 +120,46 @@ public class CarbonDictionarySortModelTest {
         new CarbonDictionarySortModel(1, DataType.TIMESTAMP, "2014-09-22 12:00:00");
     CarbonDictionarySortModel testCarbonDictionarySortModel =
         new CarbonDictionarySortModel(2, DataType.TIMESTAMP, "2014-09-22 12");
-    assertTrue(carbonDictionarySortModel.compareTo(testCarbonDictionarySortModel) == -1);
+    int expectedResult = -1;
+    int actualResult = carbonDictionarySortModel.compareTo(testCarbonDictionarySortModel);
+    assertTrue(actualResult == expectedResult);
   }
 
   @Test public void testHashCode() {
     carbonDictionarySortModel = new CarbonDictionarySortModel(1, DataType.DECIMAL, "15.24");
-    assertTrue(carbonDictionarySortModel.hashCode() == 46877260);
-
+    int actualResult = carbonDictionarySortModel.hashCode();
+    int expectedResult = 46877260;
+    assertTrue(actualResult == expectedResult);
   }
 
   @Test public void testHashCodeNullCaseForMemberValue() {
     carbonDictionarySortModel = new CarbonDictionarySortModel(1, DataType.DECIMAL, null);
-    assert (carbonDictionarySortModel.hashCode() == 0);
+    int actualResult = carbonDictionarySortModel.hashCode();
+    int expectedResult = 0;
+    assertTrue(actualResult == expectedResult);
   }
 
   @Test public void testEquals() {
     carbonDictionarySortModel = new CarbonDictionarySortModel(1, DataType.DECIMAL, "15.24");
     CarbonDictionarySortModel testCarbonDictionarySortModel = carbonDictionarySortModel;
-    assertTrue(carbonDictionarySortModel.equals(testCarbonDictionarySortModel));
+    boolean result = carbonDictionarySortModel.equals(testCarbonDictionarySortModel);
+    assertTrue(result);
   }
 
   @Test public void testEqualsMemberValueNullCase() {
     carbonDictionarySortModel = new CarbonDictionarySortModel(1, DataType.DECIMAL, null);
     CarbonDictionarySortModel testCarbonDictionarySortModel =
         new CarbonDictionarySortModel(1, DataType.BOOLEAN, "false");
-    assertFalse(carbonDictionarySortModel.equals(testCarbonDictionarySortModel));
+    boolean result = carbonDictionarySortModel.equals(testCarbonDictionarySortModel);
+    assertFalse(result);
   }
 
   @Test public void testEqualsWhenMemberValueDiffers() {
     carbonDictionarySortModel = new CarbonDictionarySortModel(1, DataType.DECIMAL, "12.45");
     CarbonDictionarySortModel testCarbonDictionarySortModel =
         new CarbonDictionarySortModel(1, DataType.BOOLEAN, "false");
-    assertFalse(carbonDictionarySortModel.equals(testCarbonDictionarySortModel));
+    boolean result = carbonDictionarySortModel.equals(testCarbonDictionarySortModel);
+    assertFalse(result);
   }
 
   @Test public void testEqualsWhenMemberValueIsSame() {
@@ -144,28 +172,35 @@ public class CarbonDictionarySortModelTest {
   @Test public void testEqualsForDifferentObjects() {
     carbonDictionarySortModel = new CarbonDictionarySortModel(1, DataType.DECIMAL, "12.45");
     Object testCarbonDictionarySortModel = new Object();
-    assertFalse(carbonDictionarySortModel.equals(testCarbonDictionarySortModel));
+    boolean result = carbonDictionarySortModel.equals(testCarbonDictionarySortModel);
+    assertFalse(result);
   }
 
   @Test public void testCompareToForDataTypeDoubleExceptionCaseForDifferentObject() {
     carbonDictionarySortModel = new CarbonDictionarySortModel(1, DataType.DOUBLE, "double");
     CarbonDictionarySortModel testCarbonDictionarySortModel =
         new CarbonDictionarySortModel(2, DataType.DOUBLE, "1234");
-    assertTrue(carbonDictionarySortModel.compareTo(testCarbonDictionarySortModel) == 1);
+    int expectedResult = 1;
+    int actualResult = carbonDictionarySortModel.compareTo(testCarbonDictionarySortModel);
+    assertTrue(actualResult == expectedResult);
   }
 
   @Test public void testCompareToForDataTypeDecimalExceptionCaseForDifferentObject() {
     carbonDictionarySortModel = new CarbonDictionarySortModel(1, DataType.DECIMAL, "12.il");
     CarbonDictionarySortModel testCarbonDictionarySortModel =
         new CarbonDictionarySortModel(2, DataType.DECIMAL, "12.89");
-    assertTrue(carbonDictionarySortModel.compareTo(testCarbonDictionarySortModel) == 1);
+    int expectedResult = 1;
+    int actualResult = carbonDictionarySortModel.compareTo(testCarbonDictionarySortModel);
+    assertTrue(actualResult == expectedResult);
   }
 
   @Test public void testCompareToForDataTypeTimestampExceptionCaseForDifferentObject() {
     carbonDictionarySortModel = new CarbonDictionarySortModel(1, DataType.TIMESTAMP, "2014-09");
     CarbonDictionarySortModel testCarbonDictionarySortModel =
         new CarbonDictionarySortModel(2, DataType.TIMESTAMP, "2014-09-22 12:00:00");
-    assertTrue(carbonDictionarySortModel.compareTo(testCarbonDictionarySortModel) == 1);
+    int expectedResult = 1;
+    int actualResult = carbonDictionarySortModel.compareTo(testCarbonDictionarySortModel);
+    assertTrue(actualResult == expectedResult);
   }
 
 }
