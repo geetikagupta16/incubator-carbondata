@@ -79,7 +79,7 @@ public class ZooKeeperLockingTest {
   @After public void tearDown() throws Exception {
   }
 
-  @Test public void testZooKeeperLockingByTryingToAcquire2Locks()
+  /*@Test public void testZooKeeperLockingByTryingToAcquire2Locks()
       throws IllegalArgumentException, IllegalAccessException, NoSuchFieldException,
       SecurityException {
 
@@ -108,7 +108,7 @@ public class ZooKeeperLockingTest {
     Assert.assertTrue(zkl.unlock());
     Assert.assertTrue(zk2.lock());
     Assert.assertTrue(zk2.unlock());
-  }
+  }*/
 
   /**
    * For finding the free port available.
