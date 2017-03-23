@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <parent>
+    <artifactId>carbondata-parent</artifactId>
+    <groupId>org.apache.carbondata</groupId>
+    <version>1.1.0-incubating-SNAPSHOT</version>
+    <relativePath>../../pom.xml</relativePath>
+  </parent>
+  <modelVersion>4.0.0</modelVersion>
+
+  <artifactId>carbondata-presto</artifactId>
+  <name>Apache CarbonData :: Presto</name>
+
+  <properties>
+    <spark.version>2.1.0</spark.version>
+    <scala.binary.version>2.11</scala.binary.version>
+    <scala.version>2.11.8</scala.version>
+    <dev.path>${basedir}/../../dev</dev.path>
+  </properties>
+
+  <dependencies>
+
+    <!-- https://mvnrepository.com/artifact/com.facebook.presto/presto-spi -->
+    <dependency>
+      <groupId>com.facebook.presto</groupId>
+      <artifactId>presto-spi</artifactId>
+      <version>0.169</version>
+    </dependency>
+
+    <dependency>
+      <groupId>com.google.guava</groupId>
+      <artifactId>guava</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>com.google.guava</groupId>
+      <artifactId>guava</artifactId>
+      <version>RELEASE</version>
+    </dependency>
+
+
+  </dependencies>
+
+
+
+</project>
