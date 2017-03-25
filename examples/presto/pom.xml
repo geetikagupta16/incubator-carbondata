@@ -13,15 +13,27 @@
   <artifactId>carbondata-examples-presto</artifactId>
   <dependencies>
       <!-- https://mvnrepository.com/artifact/com.facebook.presto/presto-spi -->
-      <dependency>
+      <!--<dependency>
         <groupId>com.facebook.presto</groupId>
         <artifactId>presto-spi</artifactId>
         <version>0.169</version>
-      </dependency>
+      </dependency>-->
     <dependency>
       <groupId>org.apache.carbondata</groupId>
       <artifactId>carbondata-examples-spark</artifactId>
       <version>1.1.0-incubating-SNAPSHOT</version>
     </dependency>
+    <dependency>
+      <groupId>com.facebook.presto</groupId>
+      <artifactId>presto-carbondata</artifactId>
+      <version>0.153</version>
+    </dependency>
+    <!-- https://mvnrepository.com/artifact/com.facebook.presto/presto-jdbc -->
+    <dependency>
+      <groupId>com.facebook.presto</groupId>
+      <artifactId>presto-jdbc</artifactId>
+      <version>0.153</version>
+    </dependency>
+
   </dependencies>
 </project>
