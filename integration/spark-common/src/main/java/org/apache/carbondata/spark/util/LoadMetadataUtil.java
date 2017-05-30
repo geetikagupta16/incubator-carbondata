@@ -15,26 +15,21 @@
  * limitations under the License.
  */
 
-/**
- * Utility for load data
- */
 package org.apache.carbondata.spark.util;
 
 import org.apache.carbondata.core.constants.CarbonCommonConstants;
-import org.apache.carbondata.core.metadata.CarbonMetadata;
-import org.apache.carbondata.core.metadata.schema.table.CarbonTable;
 import org.apache.carbondata.core.statusmanager.LoadMetadataDetails;
 import org.apache.carbondata.core.statusmanager.SegmentStatusManager;
 
+/**
+ * Utility for load data
+ */
 public final class LoadMetadataUtil {
   private LoadMetadataUtil() {
 
   }
 
-  public static boolean isLoadDeletionRequired(String dbName, String tableName) {
-    CarbonTable table = CarbonMetadata.getInstance().getCarbonTable(dbName + '_' + tableName);
-
-    String metaDataLocation = table.getMetaDataFilepath();
+  public static boolean isLoadDeletionRequired(String metaDataLocation) {
     LoadMetadataDetails[] details = SegmentStatusManager.readLoadMetadata(metaDataLocation);
     if (details != null && details.length != 0) {
       for (LoadMetadataDetails oneRow : details) {

@@ -20,6 +20,7 @@ package org.apache.carbondata.spark.vectorreader;
 import org.apache.carbondata.core.scan.result.vector.CarbonColumnVector;
 
 import org.apache.spark.sql.execution.vectorized.ColumnVector;
+import org.apache.spark.sql.types.DataType;
 import org.apache.spark.sql.types.Decimal;
 
 class ColumnarVectorWrapper implements CarbonColumnVector {
@@ -28,6 +29,14 @@ class ColumnarVectorWrapper implements CarbonColumnVector {
 
   public ColumnarVectorWrapper(ColumnVector columnVector) {
     this.columnVector = columnVector;
+  }
+
+  @Override public void putBoolean(int rowId, boolean value) {
+    columnVector.putBoolean(rowId, value);
+  }
+
+  @Override public void putFloat(int rowId, float value) {
+    columnVector.putFloat(rowId, value);
   }
 
   @Override public void putShort(int rowId, short value) {
@@ -60,8 +69,7 @@ class ColumnarVectorWrapper implements CarbonColumnVector {
 
   @Override public void putDecimals(int rowId, int count, Decimal value, int precision) {
     for (int i = 0; i < count; i++) {
-      rowId += i;
-      putDecimal(rowId, value, precision);
+      putDecimal(rowId++, value, precision);
     }
   }
 
@@ -79,8 +87,7 @@ class ColumnarVectorWrapper implements CarbonColumnVector {
 
   @Override public void putBytes(int rowId, int count, byte[] value) {
     for (int i = 0; i < count; i++) {
-      rowId += i;
-      putBytes(rowId, value);
+      putBytes(rowId++, value);
     }
   }
 
@@ -111,5 +118,9 @@ class ColumnarVectorWrapper implements CarbonColumnVector {
 
   @Override public void reset() {
 //    columnVector.reset();
+  }
+
+  @Override public DataType getType() {
+    return columnVector.dataType();
   }
 }

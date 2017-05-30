@@ -26,7 +26,8 @@ import org.apache.commons.lang3.StringUtils
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.mapreduce.lib.input.FileInputFormat
 import org.apache.spark.SparkContext
-import org.apache.spark.sql.execution.command.{ColumnProperty, Field}
+import org.apache.spark.sql.execution.command.{ColumnProperty, Field, PartitionerField}
+import org.apache.spark.sql.types.StructField
 import org.apache.spark.util.FileUtils
 
 import org.apache.carbondata.common.logging.LogServiceFactory
@@ -140,6 +141,40 @@ object CommonUtil {
           isValid = false
           throw new MalformedCarbonCommandException(s"Invalid table properties ${ key }")
         }
+    }
+    isValid
+  }
+
+  /**
+   * 1. If partitioned by clause exists, then partition_type should be defined
+   * 2. If partition_type is Hash, then number_of_partitions should be defined
+   * 3. If partition_type is List, then list_info should be defined
+   * 4. If partition_type is Range, then range_info should be defined
+   * 5. Only support single level partition for now
+   * @param tableProperties
+   * @param partitionerFields
+   * @return partition clause and definition in tblproperties are valid or not
+   */
+  def validatePartitionColumns(tableProperties: Map[String, String],
+      partitionerFields: Seq[PartitionerField]): Boolean = {
+    var isValid: Boolean = true
+    val partitionType = tableProperties.get(CarbonCommonConstants.PARTITION_TYPE)
+    val numPartitions = tableProperties.get(CarbonCommonConstants.NUM_PARTITIONS)
+    val rangeInfo = tableProperties.get(CarbonCommonConstants.RANGE_INFO)
+    val listInfo = tableProperties.get(CarbonCommonConstants.LIST_INFO)
+
+    if (partitionType.isEmpty) {
+      isValid = false
+    } else {
+      partitionType.get.toUpperCase() match {
+        case "HASH" => if (!numPartitions.isDefined) isValid = false
+        case "LIST" => if (!listInfo.isDefined) isValid = false
+        case "RANGE" => if (!rangeInfo.isDefined) isValid = false
+        case "RANGE_INTERVAL" => isValid = false
+        case _ => isValid = false
+      }
+      // only support one partition column for now
+      if (partitionerFields.length > 1) isValid = false
     }
     isValid
   }
@@ -273,6 +308,9 @@ object CommonUtil {
     CSVInputFormat.setCommentCharacter(configuration, carbonLoadModel.getCommentChar)
     CSVInputFormat.setCSVDelimiter(configuration, carbonLoadModel.getCsvDelimiter)
     CSVInputFormat.setEscapeCharacter(configuration, carbonLoadModel.getEscapeChar)
+    CSVInputFormat.setMaxColumns(configuration, carbonLoadModel.getMaxColumns)
+    CSVInputFormat.setNumberOfColumns(configuration, carbonLoadModel.getCsvHeaderColumns.length
+      .toString)
     CSVInputFormat.setHeaderExtractionEnabled(configuration,
       carbonLoadModel.getCsvHeader == null || carbonLoadModel.getCsvHeader.isEmpty)
     CSVInputFormat.setQuoteCharacter(configuration, carbonLoadModel.getQuoteChar)
@@ -342,7 +380,59 @@ object CommonUtil {
           + "the same. Input file : " + csvFile)
       }
     }
-
     csvColumns
   }
+
+  def validateMaxColumns(csvHeaders: Array[String], maxColumns: String): Int = {
+    /*
+    User configures both csvheadercolumns, maxcolumns,
+      if csvheadercolumns >= maxcolumns, give error
+      if maxcolumns > threashold, give error
+    User configures csvheadercolumns
+      if csvheadercolumns >= maxcolumns(default) then maxcolumns = csvheadercolumns+1
+      if csvheadercolumns >= threashold, give error
+    User configures nothing
+      if csvheadercolumns >= maxcolumns(default) then maxcolumns = csvheadercolumns+1
+      if csvheadercolumns >= threashold, give error
+     */
+    val columnCountInSchema = csvHeaders.length
+    var maxNumberOfColumnsForParsing = 0
+    val maxColumnsInt = getMaxColumnValue(maxColumns)
+    if (maxColumnsInt != null) {
+      if (columnCountInSchema >= maxColumnsInt) {
+        sys.error(s"csv headers should be less than the max columns: $maxColumnsInt")
+      } else if (maxColumnsInt > CSVInputFormat.THRESHOLD_MAX_NUMBER_OF_COLUMNS_FOR_PARSING) {
+        sys.error(s"max columns cannot be greater than the threshold value: ${
+          CSVInputFormat.THRESHOLD_MAX_NUMBER_OF_COLUMNS_FOR_PARSING
+        }")
+      } else {
+        maxNumberOfColumnsForParsing = maxColumnsInt
+      }
+    } else if (columnCountInSchema >= CSVInputFormat.THRESHOLD_MAX_NUMBER_OF_COLUMNS_FOR_PARSING) {
+      sys.error(s"csv header columns should be less than max threashold: ${
+        CSVInputFormat
+          .THRESHOLD_MAX_NUMBER_OF_COLUMNS_FOR_PARSING
+      }")
+    } else if (columnCountInSchema >= CSVInputFormat.DEFAULT_MAX_NUMBER_OF_COLUMNS_FOR_PARSING) {
+      maxNumberOfColumnsForParsing = columnCountInSchema + 1
+    } else {
+      maxNumberOfColumnsForParsing = CSVInputFormat.DEFAULT_MAX_NUMBER_OF_COLUMNS_FOR_PARSING
+    }
+    maxNumberOfColumnsForParsing
+  }
+
+  private def getMaxColumnValue(maxColumn: String): Integer = {
+    if (maxColumn != null) {
+      try {
+        maxColumn.toInt
+      } catch {
+        case e: Exception =>
+          LOGGER.error(s"Invalid value for max column in load options ${ e.getMessage }")
+          null
+      }
+    } else {
+      null
+    }
+  }
+
 }

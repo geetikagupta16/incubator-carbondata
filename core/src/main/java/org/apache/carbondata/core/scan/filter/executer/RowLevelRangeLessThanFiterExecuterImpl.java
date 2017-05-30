@@ -23,7 +23,6 @@ import java.util.List;
 import org.apache.carbondata.core.datastore.block.SegmentProperties;
 import org.apache.carbondata.core.datastore.chunk.DimensionColumnDataChunk;
 import org.apache.carbondata.core.datastore.chunk.impl.DimensionRawColumnChunk;
-import org.apache.carbondata.core.datastore.chunk.impl.FixedLengthDimensionDataChunk;
 import org.apache.carbondata.core.keygenerator.directdictionary.DirectDictionaryGenerator;
 import org.apache.carbondata.core.keygenerator.directdictionary.DirectDictionaryKeyGeneratorFactory;
 import org.apache.carbondata.core.metadata.AbsoluteTableIdentifier;
@@ -118,11 +117,8 @@ public class RowLevelRangeLessThanFiterExecuterImpl extends RowLevelFilterExecut
           .createBitSetGroupWithDefaultValue(blockChunkHolder.getDataBlock().numberOfPages(),
               numberOfRows, true);
     }
-    if (!dimColEvaluatorInfoList.get(0).getDimension().hasEncoding(Encoding.DICTIONARY)) {
-      return super.applyFilter(blockChunkHolder);
-    }
-    int blockIndex = segmentProperties.getDimensionOrdinalToBlockMapping()
-        .get(dimensionBlocksIndex[0]);
+    int blockIndex =
+        segmentProperties.getDimensionOrdinalToBlockMapping().get(dimensionBlocksIndex[0]);
     if (null == blockChunkHolder.getDimensionRawDataChunk()[blockIndex]) {
       blockChunkHolder.getDimensionRawDataChunk()[blockIndex] = blockChunkHolder.getDataBlock()
           .getDimensionChunk(blockChunkHolder.getFileReader(), blockIndex);
@@ -157,12 +153,11 @@ public class RowLevelRangeLessThanFiterExecuterImpl extends RowLevelFilterExecut
       CarbonDimension currentBlockDimension =
           segmentProperties.getDimensions().get(dimensionBlocksIndex[0]);
       defaultValue = FilterUtil.getMaskKey(key, currentBlockDimension,
-          this.segmentProperties.getDimensionKeyGenerator());
+          this.segmentProperties.getSortColumnsGenerator());
     }
-    if (dimensionColumnDataChunk.isExplicitSorted()
-        && dimensionColumnDataChunk instanceof FixedLengthDimensionDataChunk) {
-      return setFilterdIndexToBitSetWithColumnIndex(
-          (FixedLengthDimensionDataChunk) dimensionColumnDataChunk, numerOfRows, defaultValue);
+    if (dimensionColumnDataChunk.isExplicitSorted()) {
+      return setFilterdIndexToBitSetWithColumnIndex(dimensionColumnDataChunk, numerOfRows,
+          defaultValue);
     }
     return setFilterdIndexToBitSet(dimensionColumnDataChunk, numerOfRows, defaultValue);
   }
@@ -178,7 +173,7 @@ public class RowLevelRangeLessThanFiterExecuterImpl extends RowLevelFilterExecut
    * @return BitSet.
    */
   private BitSet setFilterdIndexToBitSetWithColumnIndex(
-      FixedLengthDimensionDataChunk dimensionColumnDataChunk, int numerOfRows,
+      DimensionColumnDataChunk dimensionColumnDataChunk, int numerOfRows,
       byte[] defaultValue) {
     BitSet bitSet = new BitSet(numerOfRows);
     int start = 0;
@@ -208,19 +203,22 @@ public class RowLevelRangeLessThanFiterExecuterImpl extends RowLevelFilterExecut
       start = CarbonUtil
           .getFirstIndexUsingBinarySearch(dimensionColumnDataChunk, startIndex, numerOfRows - 1,
               filterValues[i], false);
-      // Logic will handle the case where the range filter member is not present in block
-      // in this case the binary search will return the index from where the bit sets will be
-      // set inorder to apply filters. this is Lesser than filter so the range will be taken
-      // from the prev element which is Lesser than filter member.
-      start = CarbonUtil.nextLesserValueToTarget(start, dimensionColumnDataChunk, filterValues[i]);
+      if (start >= 0) {
+        // Logic will handle the case where the range filter member is not present in block
+        // in this case the binary search will return the index from where the bit sets will be
+        // set inorder to apply filters. this is Lesser than filter so the range will be taken
+        // from the prev element which is Lesser than filter member.
+        start =
+            CarbonUtil.nextLesserValueToTarget(start, dimensionColumnDataChunk, filterValues[i]);
+      }
       if (start < 0) {
         start = -(start + 1);
         if (start >= numerOfRows) {
           start = start - 1;
         }
-        // Method will compare the tentative index value after binary search, this tentative
-        // index needs to be compared by the filter member if its < filter then from that
-        // index the bitset will be considered for filtering process.
+        // When negative value of start is returned from getFirstIndexUsingBinarySearch the Start
+        // will be pointing to the next consecutive position. So compare it again and point to the
+        // previous value returned from getFirstIndexUsingBinarySearch.
         if (ByteUtil.compare(filterValues[i],
             dimensionColumnDataChunk.getChunkData(dimensionColumnDataChunk.getInvertedIndex(start)))
             < 0) {
@@ -253,58 +251,56 @@ public class RowLevelRangeLessThanFiterExecuterImpl extends RowLevelFilterExecut
   private BitSet setFilterdIndexToBitSet(DimensionColumnDataChunk dimensionColumnDataChunk,
       int numerOfRows, byte[] defaultValue) {
     BitSet bitSet = new BitSet(numerOfRows);
-    if (dimensionColumnDataChunk instanceof FixedLengthDimensionDataChunk) {
-      int start = 0;
-      int last = 0;
-      int startIndex = 0;
-      int skip = 0;
-      byte[][] filterValues = this.filterRangeValues;
-      //find the number of default values to skip the null value in case of direct dictionary
-      if (null != defaultValue) {
-        start = CarbonUtil.getFirstIndexUsingBinarySearch(
-            (FixedLengthDimensionDataChunk) dimensionColumnDataChunk, startIndex, numerOfRows - 1,
-            defaultValue, false);
-        if (start < 0) {
-          skip = -(start + 1);
-          // end of block
-          if (skip == numerOfRows) {
-            return bitSet;
-          }
-        } else {
-          skip = start;
+    int start = 0;
+    int last = 0;
+    int startIndex = 0;
+    int skip = 0;
+    byte[][] filterValues = this.filterRangeValues;
+    //find the number of default values to skip the null value in case of direct dictionary
+    if (null != defaultValue) {
+      start = CarbonUtil
+          .getFirstIndexUsingBinarySearch(dimensionColumnDataChunk, startIndex, numerOfRows - 1,
+              defaultValue, false);
+      if (start < 0) {
+        skip = -(start + 1);
+        // end of block
+        if (skip == numerOfRows) {
+          return bitSet;
         }
-        startIndex = skip;
+      } else {
+        skip = start;
       }
-      for (int k = 0; k < filterValues.length; k++) {
-        start = CarbonUtil.getFirstIndexUsingBinarySearch(
-            (FixedLengthDimensionDataChunk) dimensionColumnDataChunk, startIndex, numerOfRows - 1,
-            filterValues[k], false);
-        if (start >= 0) {
-          start = CarbonUtil.nextLesserValueToTarget(start,
-              (FixedLengthDimensionDataChunk) dimensionColumnDataChunk, filterValues[k]);
-        }
-        if (start < 0) {
-          start = -(start + 1);
+      startIndex = skip;
+    }
+    for (int k = 0; k < filterValues.length; k++) {
+      start = CarbonUtil
+          .getFirstIndexUsingBinarySearch(dimensionColumnDataChunk, startIndex, numerOfRows - 1,
+              filterValues[k], false);
+      if (start >= 0) {
+        start =
+            CarbonUtil.nextLesserValueToTarget(start, dimensionColumnDataChunk, filterValues[k]);
+      }
+      if (start < 0) {
+        start = -(start + 1);
 
-          if (start >= numerOfRows) {
-            start = numerOfRows - 1;
-          }
-          // Method will compare the tentative index value after binary search, this tentative
-          // index needs to be compared by the filter member if its < filter then from that
-          // index the bitset will be considered for filtering process.
-          if (ByteUtil.compare(filterValues[k], dimensionColumnDataChunk.getChunkData(start)) < 0) {
-            start = start - 1;
-          }
+        if (start >= numerOfRows) {
+          start = numerOfRows - 1;
         }
-        last = start;
-        for (int j = start; j >= skip; j--) {
-          bitSet.set(j);
-          last--;
+        // When negative value of start is returned from getFirstIndexUsingBinarySearch the Start
+        // will be pointing to the next consecutive position. So compare it again and point to the
+        // previous value returned from getFirstIndexUsingBinarySearch.
+        if (ByteUtil.compare(filterValues[k], dimensionColumnDataChunk.getChunkData(start)) < 0) {
+          start = start - 1;
         }
-        startIndex = last;
-        if (startIndex <= 0) {
-          break;
-        }
+      }
+      last = start;
+      for (int j = start; j >= skip; j--) {
+        bitSet.set(j);
+        last--;
+      }
+      startIndex = last;
+      if (startIndex <= 0) {
+        break;
       }
     }
     return bitSet;

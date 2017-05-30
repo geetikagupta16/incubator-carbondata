@@ -1,3 +1,20 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package org.apache.spark.carbondata.restructure.rowreader
 
 import java.math.BigDecimal
@@ -85,6 +102,19 @@ class ChangeDataTypeTestCases extends QueryTest with BeforeAndAfterAll {
     checkExistence(sql("show segments for table changedatatypetest"), true, "0Compacted")
     checkExistence(sql("show segments for table changedatatypetest"), true, "1Compacted")
     checkExistence(sql("show segments for table changedatatypetest"), true, "0.1Success")
+    afterAll
+  }
+
+  test("test to change int datatype to long") {
+    beforeAll
+    sql(
+      "CREATE TABLE changedatatypetest(intField int,stringField string,charField string," +
+      "timestampField timestamp,decimalField decimal(6,2)) STORED BY 'carbondata'")
+    sql(s"LOAD DATA LOCAL INPATH '$resourcesPath/restructure/data1.csv' INTO TABLE " +
+        s"changedatatypetest options('FILEHEADER'='intField,stringField,charField,timestampField," +
+        s"decimalField')")
+    sql("Alter table changedatatypetest change intField intField long")
+    checkAnswer(sql("select intField from changedatatypetest limit 1"), Row(100))
     afterAll
   }
 

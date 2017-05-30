@@ -17,6 +17,8 @@
 
 package org.apache.spark.carbondata
 
+import scala.collection.mutable
+
 import org.apache.spark.sql.common.util.QueryTest
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.{Row, SaveMode}
@@ -29,6 +31,7 @@ class CarbonDataSourceSuite extends QueryTest with BeforeAndAfterAll {
     // Drop table
     sql("DROP TABLE IF EXISTS carbon_testtable")
     sql("DROP TABLE IF EXISTS csv_table")
+    sql("DROP TABLE IF EXISTS car")
 
     // Create table
     sql(
@@ -41,7 +44,7 @@ class CarbonDataSourceSuite extends QueryTest with BeforeAndAfterAll {
          |    stringField string,
          |    decimalField decimal(13, 0),
          |    timestampField string)
-         | USING org.apache.spark.sql.CarbonSource
+         | USING org.apache.spark.sql.CarbonSource OPTIONS('tableName'='carbon_testtable')
        """.stripMargin)
 
     sql(
@@ -120,7 +123,7 @@ class CarbonDataSourceSuite extends QueryTest with BeforeAndAfterAll {
       .mode(SaveMode.Overwrite)
       .save()
     sql(s"select city, sum(m1) from testBigData " +
-        s"where country='country12' group by city order by city").show()
+        s"where country='country12' group by city order by city")
     checkAnswer(
       sql(s"select city, sum(m1) from testBigData " +
           s"where country='country12' group by city order by city"),
@@ -171,9 +174,87 @@ class CarbonDataSourceSuite extends QueryTest with BeforeAndAfterAll {
       case e =>
         println(e.getMessage)
     }
-    checkAnswer(sql("select * from testdb.test1"), Seq(Row("xx", 1), Row("xx", 11)))
+    checkAnswer(sql("select count(*) from testdb.test1"), Seq(Row(2)))
     sql("drop table testdb.test1")
     sql("drop database testdb")
+  }
+
+  test("test carbon source table with string type in dictionary_exclude") {
+    try {
+      sql("create table car( \nL_SHIPDATE string,\nL_SHIPMODE string,\nL_SHIPINSTRUCT string," +
+          "\nL_RETURNFLAG string,\nL_RECEIPTDATE string,\nL_ORDERKEY string,\nL_PARTKEY string," +
+          "\nL_SUPPKEY string,\nL_LINENUMBER int,\nL_QUANTITY decimal,\nL_EXTENDEDPRICE decimal," +
+          "\nL_DISCOUNT decimal,\nL_TAX decimal,\nL_LINESTATUS string,\nL_COMMITDATE string," +
+          "\nL_COMMENT string \n) \nUSING org.apache.spark.sql.CarbonSource\nOPTIONS (tableName " +
+          "\"car\", DICTIONARY_EXCLUDE \"L_ORDERKEY, L_PARTKEY, L_SUPPKEY, L_COMMENT\")")
+      assert(true)
+    }
+    catch {
+      case exception: Exception => assert(false)
+    }
+  }
+
+  test("test create table with complex datatype") {
+    sql("create table create_source(intField int, stringField string, complexField array<string>) USING org.apache.spark.sql.CarbonSource OPTIONS('tableName'='create_source')")
+    sql("drop table create_source")
+  }
+
+  test("test to create bucket columns with int field") {
+    sql("drop table if exists create_source")
+    intercept[Exception] {
+      sql("create table create_source(intField int, stringField string, complexField array<string>) USING org.apache.spark.sql.CarbonSource OPTIONS('bucketnumber'='1', 'bucketcolumns'='intField','tableName'='create_source')")
+    }
+  }
+
+  test("test to create bucket columns with complex data type field") {
+    sql("drop table if exists create_source")
+    intercept[Exception] {
+      sql("create table create_source(intField int, stringField string, complexField array<string>) USING org.apache.spark.sql.CarbonSource OPTIONS('bucketnumber'='1', 'bucketcolumns'='complexField','tableName'='create_source')")
+    }
+  }
+
+  test("test check results of table with complex data type and bucketing") {
+    sql("drop table if exists create_source")
+    sql("create table create_source(intField int, stringField string, complexField array<int>) USING org.apache.spark.sql.CarbonSource OPTIONS('bucketnumber'='1', 'bucketcolumns'='stringField', 'tableName'='create_source')")
+    sql("""insert into create_source values(1,"source","1$2$3")""")
+    checkAnswer(sql("select * from create_source"), Row(1,"source", mutable.WrappedArray.newBuilder[Int].+=(1,2,3)))
+    sql("drop table if exists create_source")
+  }
+
+  test("test create table without tableName in options") {
+    sql("drop table if exists carbon_test")
+    val exception = intercept[RuntimeException] {
+      sql(
+        s"""
+           | CREATE TABLE carbon_test(
+           |    stringField string,
+           |    intField int)
+           | USING org.apache.spark.sql.CarbonSource
+           | OPTIONS('DICTIONARY_EXCLUDE'='stringField')
+      """.
+          stripMargin
+      )
+    }.getMessage
+    sql("drop table if exists carbon_test")
+    assert(exception.eq("Table creation failed. Table name is not specified"))
+  }
+
+  test("test create table with space in tableName") {
+    sql("drop table if exists carbon_test")
+    val exception = intercept[RuntimeException] {
+      sql(
+        s"""
+           | CREATE TABLE carbon_test(
+           |    stringField string,
+           |    intField int)
+           | USING org.apache.spark.sql.CarbonSource
+           | OPTIONS('DICTIONARY_EXCLUDE'='stringField', 'tableName'='carbon test')
+      """.
+          stripMargin
+      )
+    }.getMessage
+    sql("drop table if exists carbon_test")
+    assert(exception.eq("Table creation failed. Table name cannot contain blank space"))
   }
 
 }

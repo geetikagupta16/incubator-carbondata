@@ -17,6 +17,9 @@
 
 package org.apache.spark.sql.execution
 
+import java.text.SimpleDateFormat
+import java.util.Date
+
 import scala.collection.JavaConverters._
 import scala.collection.mutable.ArrayBuffer
 
@@ -31,13 +34,14 @@ import org.apache.spark.sql.catalyst.plans.physical.{HashPartitioning, Partition
 import org.apache.spark.sql.execution.datasources.LogicalRelation
 import org.apache.spark.sql.optimizer.CarbonDecoderRelation
 import org.apache.spark.sql.sources.{BaseRelation, Filter}
-import org.apache.spark.sql.types.{AtomicType, IntegerType}
+import org.apache.spark.sql.types.{AtomicType, DoubleType, IntegerType, StringType, TimestampType}
 
 import org.apache.carbondata.core.constants.CarbonCommonConstants
+import org.apache.carbondata.core.keygenerator.directdictionary.timestamp.TimeStampDirectDictionaryGenerator
 import org.apache.carbondata.core.metadata.schema.BucketingInfo
 import org.apache.carbondata.core.metadata.schema.table.CarbonTable
 import org.apache.carbondata.core.util.CarbonProperties
-import org.apache.carbondata.spark.CarbonAliasDecoderRelation
+import org.apache.carbondata.spark.{CarbonAliasDecoderRelation}
 import org.apache.carbondata.spark.rdd.CarbonScanRDD
 import org.apache.carbondata.spark.util.CarbonScalaUtil
 
@@ -61,11 +65,19 @@ private[sql] class CarbonLateDecodeStrategy extends SparkStrategy {
             a.map(_.name).toArray, f), needDecoder)) ::
             Nil
       case CarbonDictionaryCatalystDecoder(relations, profile, aliasMap, _, child) =>
-        CarbonDictionaryDecoder(relations,
-          profile,
-          aliasMap,
-          planLater(child)
-        ) :: Nil
+        if ((profile.isInstanceOf[IncludeProfile] && profile.isEmpty) ||
+            !CarbonDictionaryDecoder.
+              isRequiredToDecode(CarbonDictionaryDecoder.
+                getDictionaryColumnMapping(child.output, relations, profile, aliasMap))) {
+          planLater(child) :: Nil
+        } else {
+          CarbonDictionaryDecoder(relations,
+            profile,
+            aliasMap,
+            planLater(child),
+            SparkSession.getActiveSession.get
+          ) :: Nil
+        }
       case _ => Nil
     }
   }
@@ -88,7 +100,7 @@ private[sql] class CarbonLateDecodeStrategy extends SparkStrategy {
       newAttr
     }
     new CarbonDecoderRDD(Seq(relation), IncludeProfile(attrs),
-      CarbonAliasDecoderRelation(), rdd, output)
+      CarbonAliasDecoderRelation(), rdd, output, SparkSession.getActiveSession.get)
   }
 
   private[this] def toCatalystRDD(
@@ -227,9 +239,20 @@ private[sql] class CarbonLateDecodeStrategy extends SparkStrategy {
         updateRequestedColumns.asInstanceOf[Seq[Attribute]])
       filterCondition.map(execution.FilterExec(_, scan)).getOrElse(scan)
     } else {
+
+      var newProjectList: Seq[Attribute] = Seq.empty
+      val updatedProjects = projects.map {
+          case a@Alias(s: ScalaUDF, name)
+            if name.equalsIgnoreCase(CarbonCommonConstants.POSITION_ID) ||
+                name.equalsIgnoreCase(CarbonCommonConstants.CARBON_IMPLICIT_COLUMN_TUPLEID) =>
+            val reference = AttributeReference(name, StringType, true)().withExprId(a.exprId)
+            newProjectList :+= reference
+            reference
+          case other => other
+      }
       // Don't request columns that are only referenced by pushed filters.
       val requestedColumns =
-      (projectSet ++ filterSet -- handledSet).map(relation.attributeMap).toSeq
+      (projectSet ++ filterSet -- handledSet).map(relation.attributeMap).toSeq ++ newProjectList
       val updateRequestedColumns = updateRequestedColumnsFunc(requestedColumns, table, needDecoder)
       val scan = getDataSourceScan(relation,
         updateRequestedColumns.asInstanceOf[Seq[Attribute]],
@@ -240,7 +263,8 @@ private[sql] class CarbonLateDecodeStrategy extends SparkStrategy {
         needDecoder,
         updateRequestedColumns.asInstanceOf[Seq[Attribute]])
       execution.ProjectExec(
-        updateRequestedColumnsFunc(projects, table, needDecoder).asInstanceOf[Seq[NamedExpression]],
+        updateRequestedColumnsFunc(updatedProjects, table,
+          needDecoder).asInstanceOf[Seq[NamedExpression]],
         filterCondition.map(execution.FilterExec(_, scan)).getOrElse(scan))
     }
   }
@@ -343,7 +367,6 @@ private[sql] class CarbonLateDecodeStrategy extends SparkStrategy {
     }
   }
 
-
   protected[sql] def selectFilters(
       relation: BaseRelation,
       predicates: Seq[Expression]): (Seq[Expression], Seq[Filter]) = {
@@ -389,8 +412,10 @@ private[sql] class CarbonLateDecodeStrategy extends SparkStrategy {
     (unrecognizedPredicates ++ unhandledPredicates, translatedFilters)
   }
 
+
   /**
    * Tries to translate a Catalyst [[Expression]] into data source [[Filter]].
+   *
    * @return a `Some[Filter]` if the input [[Expression]] is convertible, otherwise a `None`.
    */
   protected[sql] def translateFilter(predicate: Expression, or: Boolean = false): Option[Filter] = {
@@ -417,15 +442,22 @@ private[sql] class CarbonLateDecodeStrategy extends SparkStrategy {
         } else {
           (translateFilter(left) ++ translateFilter(right)).reduceOption(sources.And)
         }
-
       case EqualTo(a: Attribute, Literal(v, t)) =>
         Some(sources.EqualTo(a.name, v))
       case EqualTo(l@Literal(v, t), a: Attribute) =>
         Some(sources.EqualTo(a.name, v))
+      case c@EqualTo(Cast(a: Attribute, _), Literal(v, t)) =>
+        CastExpressionOptimization.checkIfCastCanBeRemove(c)
+      case c@EqualTo(Literal(v, t), Cast(a: Attribute, _)) =>
+        CastExpressionOptimization.checkIfCastCanBeRemove(c)
       case Not(EqualTo(a: Attribute, Literal(v, t))) =>
           Some(sources.Not(sources.EqualTo(a.name, v)))
       case Not(EqualTo(Literal(v, t), a: Attribute)) =>
           Some(sources.Not(sources.EqualTo(a.name, v)))
+      case c@Not(EqualTo(Cast(a: Attribute, _), Literal(v, t))) =>
+        CastExpressionOptimization.checkIfCastCanBeRemove(c)
+      case c@Not(EqualTo(Literal(v, t), Cast(a: Attribute, _))) =>
+        CastExpressionOptimization.checkIfCastCanBeRemove(c)
       case IsNotNull(a: Attribute) => Some(sources.IsNotNull(a.name))
       case IsNull(a: Attribute) => Some(sources.IsNull(a.name))
       case Not(In(a: Attribute, list)) if !list.exists(!_.isInstanceOf[Literal]) =>
@@ -434,22 +466,45 @@ private[sql] class CarbonLateDecodeStrategy extends SparkStrategy {
       case In(a: Attribute, list) if !list.exists(!_.isInstanceOf[Literal]) =>
         val hSet = list.map(e => e.eval(EmptyRow))
         Some(sources.In(a.name, hSet.toArray))
+      case c@Not(In(Cast(a: Attribute, _), list))
+        if !list.exists(!_.isInstanceOf[Literal]) =>
+        Some(CastExpr(c))
+      case c@In(Cast(a: Attribute, _), list) if !list.exists(!_.isInstanceOf[Literal]) =>
+        Some(CastExpr(c))
       case GreaterThan(a: Attribute, Literal(v, t)) =>
         Some(sources.GreaterThan(a.name, v))
       case GreaterThan(Literal(v, t), a: Attribute) =>
         Some(sources.LessThan(a.name, v))
+      case c@GreaterThan(Cast(a: Attribute, _), Literal(v, t)) =>
+        CastExpressionOptimization.checkIfCastCanBeRemove(c)
+      case c@GreaterThan(Literal(v, t), Cast(a: Attribute, _)) =>
+        CastExpressionOptimization.checkIfCastCanBeRemove(c)
       case LessThan(a: Attribute, Literal(v, t)) =>
         Some(sources.LessThan(a.name, v))
       case LessThan(Literal(v, t), a: Attribute) =>
         Some(sources.GreaterThan(a.name, v))
+      case c@LessThan(Cast(a: Attribute, _), Literal(v, t)) =>
+        CastExpressionOptimization.checkIfCastCanBeRemove(c)
+      case c@LessThan(Literal(v, t), Cast(a: Attribute, _)) =>
+        CastExpressionOptimization.checkIfCastCanBeRemove(c)
       case GreaterThanOrEqual(a: Attribute, Literal(v, t)) =>
         Some(sources.GreaterThanOrEqual(a.name, v))
       case GreaterThanOrEqual(Literal(v, t), a: Attribute) =>
         Some(sources.LessThanOrEqual(a.name, v))
+      case c@GreaterThanOrEqual(Cast(a: Attribute, _), Literal(v, t)) =>
+        CastExpressionOptimization.checkIfCastCanBeRemove(c)
+      case c@GreaterThanOrEqual(Literal(v, t), Cast(a: Attribute, _)) =>
+        CastExpressionOptimization.checkIfCastCanBeRemove(c)
       case LessThanOrEqual(a: Attribute, Literal(v, t)) =>
         Some(sources.LessThanOrEqual(a.name, v))
       case LessThanOrEqual(Literal(v, t), a: Attribute) =>
         Some(sources.GreaterThanOrEqual(a.name, v))
+      case c@LessThanOrEqual(Cast(a: Attribute, _), Literal(v, t)) =>
+        CastExpressionOptimization.checkIfCastCanBeRemove(c)
+      case c@LessThanOrEqual(Literal(v, t), Cast(a: Attribute, _)) =>
+        CastExpressionOptimization.checkIfCastCanBeRemove(c)
+      case StartsWith(a: Attribute, Literal(v, t)) =>
+        Some(sources.StringStartsWith(a.name, v.toString))
       case others => None
     }
   }

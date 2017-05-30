@@ -57,16 +57,6 @@ public class NodeHolder {
   private int[] keyLengths;
 
   /**
-   * dataAfterCompression
-   */
-  private short[][] dataAfterCompression;
-
-  /**
-   * indexMap
-   */
-  private short[][] indexMap;
-
-  /**
    * keyIndexBlockLenght
    */
   private int[] keyBlockIndexLength;
@@ -84,11 +74,6 @@ public class NodeHolder {
    * dataIndexMap
    */
   private int[] dataIndexMapLength;
-
-  /**
-   * dataIndexMap
-   */
-  private int[] dataIndexMapOffsets;
 
   /**
    * compressedDataIndex
@@ -120,19 +105,9 @@ public class NodeHolder {
   private boolean[] aggBlocks;
 
   /**
-   * all columns max value
-   */
-  private byte[][] allMaxValue;
-
-  /**
-   * all column max value
-   */
-  private byte[][] allMinValue;
-
-  /**
    * true if given index is colgroup block
    */
-  private boolean[] colGrpBlock;
+  private boolean[] colGrpBlocks;
 
   /**
    * bit set which will holds the measure
@@ -154,6 +129,12 @@ public class NodeHolder {
    * data size this node holder is holding
    */
   private int holderSize;
+
+  /**
+   * to check all the pages to be
+   * written, this will be used for v3 format
+   */
+  private boolean writeAll;
 
   /**
    * @return the keyArray
@@ -377,14 +358,14 @@ public class NodeHolder {
    * @return
    */
   public boolean[] getColGrpBlocks() {
-    return this.colGrpBlock;
+    return this.colGrpBlocks;
   }
 
   /**
    * @param colGrpBlock true if block is column group
    */
   public void setColGrpBlocks(boolean[] colGrpBlock) {
-    this.colGrpBlock = colGrpBlock;
+    this.colGrpBlocks = colGrpBlock;
   }
 
   /**
@@ -439,5 +420,12 @@ public class NodeHolder {
 
   public void setHolderSize(int holderSize) {
     this.holderSize = holderSize;
+  }
+
+  public void setWriteAll(boolean writeAll) {
+    this.writeAll = writeAll;
+  }
+  public boolean isWriteAll() {
+    return this.writeAll;
   }
 }

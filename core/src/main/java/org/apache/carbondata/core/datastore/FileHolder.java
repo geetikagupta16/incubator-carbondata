@@ -17,6 +17,7 @@
 
 package org.apache.carbondata.core.datastore;
 
+import java.io.DataInputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 
@@ -27,12 +28,12 @@ public interface FileHolder {
    * and length(number of bytes) need to read
    *
    * @param filePath fully qualified file path
-   * @param byteBuffer
    * @param offset reading start position,
    * @param length number of bytes to be read
+   * @return ByteBuffer
    * @throws IOException
    */
-  void readByteBuffer(String filePath, ByteBuffer byteBuffer, long offset, int length)
+  ByteBuffer readByteBuffer(String filePath, long offset, int length)
       throws IOException;
   /**
    * This method will be used to read the byte array from file based on offset
@@ -97,4 +98,11 @@ public interface FileHolder {
    * This method will be used to close all the streams currently present in the cache
    */
   void finish() throws IOException;
+
+  void setQueryId(String queryId);
+
+  String getQueryId();
+
+  DataInputStream getDataInputStream(String filePath, long offset) throws IOException;
+
 }

@@ -62,11 +62,10 @@ who are building, deploying, and using CarbonData.
 
   2. Use the following command :
 
-    ```
-     "mvn -Pspark-2.1 -Dspark.version {yourSparkVersion} clean package"
-    ```
-
-    Note :  Refrain from using "mvn clean package" without specifying the profile.
+```
+"mvn -Pspark-2.1 -Dspark.version {yourSparkVersion} clean package"
+```
+Note :  Refrain from using "mvn clean package" without specifying the profile.
 
 ## Failed to execute load query on cluster.
 
@@ -132,7 +131,7 @@ who are building, deploying, and using CarbonData.
 
   Ensure that the Hiveuser in mysql must allow its access to the external processes.
 
-## Failure to read the metastore db during table creation.
+## Failed to read the metastore db during table creation.
 
   **Symptom**
 
@@ -226,7 +225,7 @@ who are building, deploying, and using CarbonData.
 
   **Procedure**
 
-  Worker must wait for the query execution to complete and the table to release the lock for another query execution to succeed..
+  Worker must wait for the query execution to complete and the table to release the lock for another query execution to succeed.
 
 ## Failed to create a table with a single numeric column.
 
@@ -240,7 +239,7 @@ who are building, deploying, and using CarbonData.
 
   **Possible Cause**
 
-  Behavior not supported.
+  Behaviour not supported.
 
   **Procedure**
 

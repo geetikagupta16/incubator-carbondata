@@ -22,17 +22,17 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import org.apache.carbondata.core.keygenerator.KeyGenerator;
+import org.apache.carbondata.core.keygenerator.factory.KeyGeneratorFactory;
 import org.apache.carbondata.core.metadata.AbsoluteTableIdentifier;
+import org.apache.carbondata.core.metadata.datatype.DataType;
 import org.apache.carbondata.core.metadata.schema.BucketingInfo;
+import org.apache.carbondata.core.metadata.schema.table.column.CarbonColumn;
 import org.apache.carbondata.processing.newflow.converter.DictionaryCardinalityFinder;
 
 public class CarbonDataLoadConfiguration {
 
   private DataField[] dataFields;
-
-  private DataField[] dimensionFields;
-
-  private DataField[] measureFields;
 
   private AbsoluteTableIdentifier tableIdentifier;
 
@@ -69,6 +69,10 @@ public class CarbonDataLoadConfiguration {
 
   private int measureCount;
 
+  private int noDictionaryCount;
+
+  private int complexColumnCount;
+
   /**
    * schema updated time stamp to be used for restructure scenarios
    */
@@ -76,35 +80,36 @@ public class CarbonDataLoadConfiguration {
 
   private DictionaryCardinalityFinder cardinalityFinder;
 
+  private int numberOfSortColumns;
+
+  private int numberOfNoDictSortColumns;
+
   public CarbonDataLoadConfiguration() {
   }
 
-  private void initDimensionFields() {
-    List<Integer> dimensionIndexes = new ArrayList<>(dataFields.length);
-    for (int i = 0; i < dataFields.length; i++) {
-      if (dataFields[i].getColumn().isDimesion()) {
-        dimensionIndexes.add(i);
-        dimensionCount++;
-      }
-    }
-    dimensionFields = new DataField[dimensionCount];
-    for (int i = 0; i < dimensionCount; i++) {
-      dimensionFields[i] = dataFields[dimensionIndexes.get(i)];
-    }
-  }
+  public void setDataFields(DataField[] dataFields) {
+    this.dataFields = dataFields;
 
-  private void initMeasureFields() {
-    List<Integer> measureIndexes = new ArrayList<>(dataFields.length);
-    for (int i = 0; i < dataFields.length; i++) {
-      if (!dataFields[i].getColumn().isDimesion()) {
-        measureIndexes.add(i);
+    // set counts for each column category
+    for (DataField dataField : dataFields) {
+      CarbonColumn column = dataField.getColumn();
+      if (column.isDimension()) {
+        dimensionCount++;
+        if (!dataField.hasDictionaryEncoding()) {
+          noDictionaryCount++;
+        }
+      }
+      if (column.isComplex()) {
+        complexColumnCount++;
+      }
+      if (column.isMeasure()) {
         measureCount++;
       }
     }
-    measureFields = new DataField[measureCount];
-    for (int i = 0; i < measureCount; i++) {
-      measureFields[i] = dataFields[measureIndexes.get(i)];
-    }
+  }
+
+  public DataField[] getDataFields() {
+    return dataFields;
   }
 
   public int getDimensionCount() {
@@ -112,37 +117,35 @@ public class CarbonDataLoadConfiguration {
   }
 
   public int getNoDictionaryCount() {
-    int dimCount = 0;
-    for (int i = 0; i < dataFields.length; i++) {
-      if (dataFields[i].getColumn().isDimesion() && !dataFields[i].hasDictionaryEncoding()) {
-        dimCount++;
-      }
-    }
-    return dimCount;
+    return noDictionaryCount;
   }
 
-  public int getComplexDimensionCount() {
-    int dimCount = 0;
-    for (int i = 0; i < dataFields.length; i++) {
-      if (dataFields[i].getColumn().isComplex()) {
-        dimCount++;
-      }
-    }
-    return dimCount;
+  public int getComplexColumnCount() {
+    return complexColumnCount;
   }
 
   public int getMeasureCount() {
     return measureCount;
   }
 
-  public DataField[] getDataFields() {
-    return dataFields;
+  public void setNumberOfSortColumns(int numberOfSortColumns) {
+    this.numberOfSortColumns = numberOfSortColumns;
   }
 
-  public void setDataFields(DataField[] dataFields) {
-    this.dataFields = dataFields;
-    initDimensionFields();
-    initMeasureFields();
+  public int getNumberOfSortColumns() {
+    return this.numberOfSortColumns;
+  }
+
+  public boolean isSortTable() {
+    return this.numberOfSortColumns > 0;
+  }
+
+  public void setNumberOfNoDictSortColumns(int numberOfNoDictSortColumns) {
+    this.numberOfNoDictSortColumns = numberOfNoDictSortColumns;
+  }
+
+  public int getNumberOfNoDictSortColumns() {
+    return this.numberOfNoDictSortColumns;
   }
 
   public String[] getHeader() {
@@ -233,14 +236,6 @@ public class CarbonDataLoadConfiguration {
     this.preFetch = preFetch;
   }
 
-  public DataField[] getDimensionFields() {
-    return dimensionFields;
-  }
-
-  public DataField[] getMeasureFields() {
-    return measureFields;
-  }
-
   public long getSchemaUpdatedTimeStamp() {
     return schemaUpdatedTimeStamp;
   }
@@ -255,5 +250,52 @@ public class CarbonDataLoadConfiguration {
 
   public void setCardinalityFinder(DictionaryCardinalityFinder cardinalityFinder) {
     this.cardinalityFinder = cardinalityFinder;
+  }
+
+  public DataType[] getMeasureDataType() {
+    List<Integer> measureIndexes = new ArrayList<>(dataFields.length);
+    int measureCount = 0;
+    for (int i = 0; i < dataFields.length; i++) {
+      if (!dataFields[i].getColumn().isDimension()) {
+        measureIndexes.add(i);
+        measureCount++;
+      }
+    }
+
+    DataType[] type = new DataType[measureCount];
+    for (int i = 0; i < type.length; i++) {
+      type[i] = dataFields[measureIndexes.get(i)].getColumn().getDataType();
+    }
+    return type;
+  }
+
+  public int[] calcDimensionLengths() {
+    int[] dimLensWithComplex = getCardinalityFinder().getCardinality();
+    if (!isSortTable()) {
+      for (int i = 0; i < dimLensWithComplex.length; i++) {
+        if (dimLensWithComplex[i] != 0) {
+          dimLensWithComplex[i] = Integer.MAX_VALUE;
+        }
+      }
+    }
+    List<Integer> dimsLenList = new ArrayList<Integer>();
+    for (int eachDimLen : dimLensWithComplex) {
+      if (eachDimLen != 0) dimsLenList.add(eachDimLen);
+    }
+    int[] dimLens = new int[dimsLenList.size()];
+    for (int i = 0; i < dimsLenList.size(); i++) {
+      dimLens[i] = dimsLenList.get(i);
+    }
+    return dimLens;
+  }
+
+  public KeyGenerator[] createKeyGeneratorForComplexDimension() {
+    int[] dimLens = calcDimensionLengths();
+    KeyGenerator[] complexKeyGenerators = new KeyGenerator[dimLens.length];
+    for (int i = 0; i < dimLens.length; i++) {
+      complexKeyGenerators[i] =
+          KeyGeneratorFactory.getKeyGenerator(new int[] { dimLens[i] });
+    }
+    return complexKeyGenerators;
   }
 }

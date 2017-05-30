@@ -57,7 +57,8 @@ public class CarbondataPageSource implements ConnectorPageSource {
   private boolean closed;
   private final char[] buffer = new char[100];
 
-  public CarbondataPageSource(RecordSet recordSet) {
+  public CarbondataPageSource(RecordSet recordSet)
+  {
     this(requireNonNull(recordSet, "recordSet is null").getColumnTypes(), recordSet.cursor());
   }
 
@@ -66,6 +67,7 @@ public class CarbondataPageSource implements ConnectorPageSource {
     this.types = unmodifiableList(new ArrayList<>(requireNonNull(types, "types is null")));
     this.pageBuilder = new PageBuilder(this.types);
   }
+
 
   public RecordCursor getCursor() {
     return cursor;

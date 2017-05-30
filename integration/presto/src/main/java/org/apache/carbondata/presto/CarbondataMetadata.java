@@ -198,15 +198,16 @@ public class CarbondataMetadata implements ConnectorMetadata {
       Type spiType;
       spiType = CarbondataType2SpiMapperForComplex(column);
       if (column.isComplex() && spiType instanceof ArrayType) {
+        ColumnSchema complexElementColumnSchema = column.getListOfChildDimensions().get(0).getColumnSchema();
         columnHandles.put(column.getColumnSchema().getColumnName(),
             new CarbondataColumnHandle(connectorId, column.getColumnSchema().getColumnName(),
                 spiType, column.getSchemaOrdinal(), column.getKeyOrdinal(),
                 column.getColumnGroupOrdinal(), false,
-                column.getListOfChildDimensions().get(0).getColumnSchema().getColumnGroupId(),
-                column.getListOfChildDimensions().get(0).getColumnSchema().getColumnUniqueId(),
+                complexElementColumnSchema.getColumnGroupId(),
+                complexElementColumnSchema.getColumnUniqueId(),
                 cs.isUseInvertedIndex(),
-                column.getListOfChildDimensions().get(0).getColumnSchema().getPrecision(),
-                column.getListOfChildDimensions().get(0).getColumnSchema().getScale()));
+                complexElementColumnSchema.getPrecision(),
+                complexElementColumnSchema.getScale()));
       } else {
         columnHandles.put(cs.getColumnName(),
             new CarbondataColumnHandle(connectorId, cs.getColumnName(), spiType,

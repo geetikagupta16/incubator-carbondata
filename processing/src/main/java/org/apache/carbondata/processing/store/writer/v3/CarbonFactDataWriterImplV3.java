@@ -83,7 +83,7 @@ public class CarbonFactDataWriterImplV3 extends AbstractFactDataWriter<short[]> 
    * be written in carbon data file
    */
   @Override public NodeHolder buildDataNodeHolder(IndexStorage<short[]>[] keyStorageArray,
-      byte[][] dataArray, int entryCount, byte[] startKey, byte[] endKey,
+      byte[][] measureArray, int entryCount, byte[] startKey, byte[] endKey,
       WriterCompressModel compressionModel, byte[] noDictionaryStartKey, byte[] noDictionaryEndKey,
       BitSet[] nullValueIndexBitSet) throws CarbonDataWriterException {
     // if there are no NO-Dictionary column present in the table then
@@ -105,16 +105,14 @@ public class CarbonFactDataWriterImplV3 extends AbstractFactDataWriter<short[]> 
     int[] keyLengths = new int[keyStorageArray.length];
 
     // below will calculate min and max value for each column
-    // for below 2d array, first index will be for column and second will be min
-    // max
+    // for below 2d array, first index will be for column and second will be min and max
     // value for same column
-    // byte[][] columnMinMaxData = new byte[keyStorageArray.length][];
 
     byte[][] dimensionMinValue = new byte[keyStorageArray.length][];
     byte[][] dimensionMaxValue = new byte[keyStorageArray.length][];
 
-    byte[][] measureMinValue = new byte[dataArray.length][];
-    byte[][] measureMaxValue = new byte[dataArray.length][];
+    byte[][] measureMinValue = new byte[measureArray.length][];
+    byte[][] measureMaxValue = new byte[measureArray.length][];
 
     byte[][] keyBlockData = fillAndCompressedKeyBlockData(keyStorageArray, entryCount);
     boolean[] colGrpBlock = new boolean[keyStorageArray.length];
@@ -137,7 +135,7 @@ public class CarbonFactDataWriterImplV3 extends AbstractFactDataWriter<short[]> 
         colGrpBlock[i] = true;
       }
     }
-    for (int i = 0; i < dataArray.length; i++) {
+    for (int i = 0; i < measureArray.length; i++) {
       measureMaxValue[i] = CarbonMetadataUtil
           .getByteValueForMeasure(compressionModel.getMaxValue()[i],
               dataWriterVo.getSegmentProperties().getMeasures().get(i).getDataType());
@@ -176,13 +174,13 @@ public class CarbonFactDataWriterImplV3 extends AbstractFactDataWriter<short[]> 
     int[] msrLength = new int[dataWriterVo.getMeasureCount()];
     // calculate the total size required for all the measure and get the
     // each measure size
-    for (int i = 0; i < dataArray.length; i++) {
-      currentMsrLenght = dataArray[i].length;
+    for (int i = 0; i < measureArray.length; i++) {
+      currentMsrLenght = measureArray[i].length;
       totalMsrArrySize += currentMsrLenght;
       msrLength[i] = currentMsrLenght;
     }
     NodeHolder holder = new NodeHolder();
-    holder.setDataArray(dataArray);
+    holder.setDataArray(measureArray);
     holder.setKeyArray(keyBlockData);
     holder.setMeasureNullValueIndex(nullValueIndexBitSet);
     // end key format will be <length of dictionary key><length of no
@@ -314,11 +312,37 @@ public class CarbonFactDataWriterImplV3 extends AbstractFactDataWriter<short[]> 
   @Override public void writeBlockletData(NodeHolder holder) throws CarbonDataWriterException {
     // check the number of pages present in data holder, if pages is exceeding threshold
     // it will write the pages to file
-    if (dataWriterHolder.getSize() + holder.getHolderSize() >= blockletSize) {
-      LOGGER.info("Number of Pages for blocklet is: " + dataWriterHolder.getSize());
-      writeDataToFile(fileChannel);
+    // condition for writting all the pages
+    if (!holder.isWriteAll()) {
+      boolean isAdded = false;
+      // check if size more than blocklet size then write the page
+      if (dataWriterHolder.getSize() + holder.getHolderSize() >= blockletSize) {
+        // if one page size is more than blocklet size
+        if (dataWriterHolder.getNodeHolder().size() == 0) {
+          isAdded = true;
+          dataWriterHolder.addNodeHolder(holder);
+        }
+
+        LOGGER.info("Number of Pages for blocklet is: " + dataWriterHolder.getNumberOfPagesAdded()
+            + " :Rows Added: " + dataWriterHolder.getTotalRows());
+        // write the data
+        writeDataToFile(fileChannel);
+      }
+      if (!isAdded) {
+        dataWriterHolder.addNodeHolder(holder);
+      }
+    } else {
+      //for last blocklet check if the last page will exceed the blocklet size then write
+      // existing pages and then last page
+      if (holder.getEntryCount() > 0) {
+        dataWriterHolder.addNodeHolder(holder);
+      }
+      if (dataWriterHolder.getNumberOfPagesAdded() > 0) {
+        LOGGER.info("Number of Pages for blocklet is: " + dataWriterHolder.getNumberOfPagesAdded()
+            + " :Rows Added: " + dataWriterHolder.getTotalRows());
+        writeDataToFile(fileChannel);
+      }
     }
-    dataWriterHolder.addNodeHolder(holder);
   }
 
   private void writeDataToFile(FileChannel channel) {
@@ -333,8 +357,8 @@ public class CarbonFactDataWriterImplV3 extends AbstractFactDataWriter<short[]> 
     // calculate the size of data chunks
     try {
       for (int i = 0; i < nodeHolderList.get(0).getKeyArray().length; i++) {
-        dataChunkBytes[i] = CarbonUtil.getByteArray(CarbonMetadataUtil
-            .getDataChunk3(nodeHolderList, thriftColumnSchemaList,
+        dataChunkBytes[i] = CarbonUtil.getByteArray(
+            CarbonMetadataUtil.getDataChunk3(nodeHolderList, thriftColumnSchemaList,
                 dataWriterVo.getSegmentProperties(), i, true));
         blockletDataSize += dataChunkBytes[i].length;
       }
@@ -538,19 +562,21 @@ public class CarbonFactDataWriterImplV3 extends AbstractFactDataWriter<short[]> 
    * @throws CarbonDataWriterException
    */
   public void closeWriter() throws CarbonDataWriterException {
-    if (dataWriterHolder.getNodeHolder().size() > 0) {
-      writeDataToFile(fileChannel);
-      writeBlockletInfoToFile(fileChannel, carbonDataFileTempPath);
-      CarbonUtil.closeStreams(this.fileOutputStream, this.fileChannel);
-      renameCarbonDataFile();
-      copyCarbonDataFileToCarbonStorePath(
-          this.carbonDataFileTempPath.substring(0, this.carbonDataFileTempPath.lastIndexOf('.')));
-      try {
-        writeIndexFile();
-      } catch (IOException e) {
-        throw new CarbonDataWriterException("Problem while writing the index file", e);
-      }
+    CarbonUtil.closeStreams(this.fileOutputStream, this.fileChannel);
+    renameCarbonDataFile();
+    copyCarbonDataFileToCarbonStorePath(
+        this.carbonDataFileTempPath.substring(0, this.carbonDataFileTempPath.lastIndexOf('.')));
+    try {
+      writeIndexFile();
+    } catch (IOException e) {
+      throw new CarbonDataWriterException("Problem while writing the index file", e);
     }
     closeExecutorService();
+  }
+
+  @Override public void writeBlockletInfoToFile() throws CarbonDataWriterException {
+    if (this.blockletMetadata.size() > 0) {
+      writeBlockletInfoToFile(fileChannel, carbonDataFileTempPath);
+    }
   }
 }

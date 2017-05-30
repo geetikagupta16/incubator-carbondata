@@ -33,6 +33,7 @@ import org.apache.carbondata.core.constants.CarbonCommonConstants;
 import org.apache.carbondata.core.keygenerator.KeyGenException;
 import org.junit.Assert;
 import org.junit.Before;
+import org.junit.Ignore;
 import org.junit.Test;
 
 /**
@@ -157,31 +158,6 @@ public class ColGroupMinMaxTest {
 				min[i] = data[i];
 			}
 		}
-	}
-
-	@Test
-	public void testRowStoreMinMax() throws KeyGenException {
-
-		DataHolder[] dataHolders = getDataHolders(segmentProperties.getColumnGroupModel().getNoOfColumnStore(),
-				mdkeyData.length);
-		for (int i = 0; i < mdkeyData.length; i++) {
-			byte[][] split = segmentProperties.getFixedLengthKeySplitter().splitKey(mdkeyData[i]);
-			for (int j = 0; j < split.length; j++) {
-				dataHolders[j].addData(split[j], i);
-			}
-
-		}
-		ColGroupBlockStorage[] rowBlockStorage = new ColGroupBlockStorage[dataHolders.length];
-		for (int i = 0; i < dataHolders.length; i++) {
-
-			rowBlockStorage[i] = new ColGroupBlockStorage(dataHolders[i]);
-		}
-		int[][] columnGroup = segmentProperties.getColumnGroups();
-		for (int i = 0; i < dataHolders.length; i++) {
-			assertMinMax(colGrpMinMax[i].getMin(), rowBlockStorage[i].getMax(),
-					columnGroup[i]);
-		}
-
 	}
 
 	private void assertMinMax(byte[] min, byte[] max, int[] columnGroup)

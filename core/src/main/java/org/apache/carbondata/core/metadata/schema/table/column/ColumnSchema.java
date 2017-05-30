@@ -109,6 +109,8 @@ public class ColumnSchema implements Serializable {
    */
   private boolean invisible = false;
 
+  private boolean isSortColumn = false;
+
   /**
    * @return the columnName
    */
@@ -263,7 +265,8 @@ public class ColumnSchema implements Serializable {
   @Override public int hashCode() {
     final int prime = 31;
     int result = 1;
-    result = prime * result + ((columnName == null) ? 0 : columnName.hashCode());
+    result = prime * result + ((columnName == null) ? 0 : columnName.hashCode()) +
+      ((dataType == null) ? 0 : dataType.hashCode());
     return result;
   }
 
@@ -286,6 +289,13 @@ public class ColumnSchema implements Serializable {
         return false;
       }
     } else if (!columnName.equals(other.columnName)) {
+      return false;
+    }
+    if (dataType == null) {
+      if (other.dataType != null) {
+        return false;
+      }
+    } else if (!dataType.equals(other.dataType)) {
       return false;
     }
     return true;
@@ -402,5 +412,13 @@ public class ColumnSchema implements Serializable {
 
   public void setSchemaOrdinal(int schemaOrdinal) {
     this.schemaOrdinal = schemaOrdinal;
+  }
+
+  public boolean isSortColumn() {
+    return isSortColumn;
+  }
+
+  public void setSortColumn(boolean sortColumn) {
+    isSortColumn = sortColumn;
   }
 }

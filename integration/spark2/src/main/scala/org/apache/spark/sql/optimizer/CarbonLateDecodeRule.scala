@@ -20,7 +20,6 @@ package org.apache.spark.sql.optimizer
 import java.util
 
 import scala.collection.JavaConverters._
-import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
 
 import org.apache.spark.sql._
@@ -30,9 +29,10 @@ import org.apache.spark.sql.catalyst.plans.logical._
 import org.apache.spark.sql.catalyst.rules.Rule
 import org.apache.spark.sql.execution.command.RunnableCommand
 import org.apache.spark.sql.execution.datasources.LogicalRelation
-import org.apache.spark.sql.types.{IntegerType, StringType, StructField, StructType}
+import org.apache.spark.sql.types.{IntegerType, StringType}
 
 import org.apache.carbondata.common.logging.LogServiceFactory
+import org.apache.carbondata.core.constants.CarbonCommonConstants
 import org.apache.carbondata.core.stats.QueryStatistic
 import org.apache.carbondata.core.util.CarbonTimeStatisticsFactory
 import org.apache.carbondata.spark.{CarbonAliasDecoderRelation, CarbonFilters}
@@ -60,14 +60,19 @@ class CarbonLateDecodeRule extends Rule[LogicalPlan] with PredicateHelper {
     if (relations.nonEmpty && !isOptimized(plan)) {
       // In case scalar subquery skip the transformation and update the flag.
       if (relations.exists(_.carbonRelation.isSubquery.nonEmpty)) {
-        relations.foreach(p => p.carbonRelation.isSubquery.remove(0))
+        relations.foreach{carbonDecoderRelation =>
+          if (carbonDecoderRelation.carbonRelation.isSubquery.nonEmpty) {
+            carbonDecoderRelation.carbonRelation.isSubquery.remove(0)
+          }
+        }
         LOGGER.info("Skip CarbonOptimizer for scalar/predicate sub query")
         return plan
       }
       LOGGER.info("Starting to optimize plan")
+      val udfTransformedPlan = pushDownUDFToJoinLeftRelation(plan)
       val recorder = CarbonTimeStatisticsFactory.createExecutorRecorder("")
       val queryStatistic = new QueryStatistic()
-      val result = transformCarbonPlan(plan, relations)
+      val result = transformCarbonPlan(udfTransformedPlan, relations)
       queryStatistic.addStatistics("Time taken for Carbon Optimizer to optimize: ",
         System.currentTimeMillis)
       recorder.recordStatistics(queryStatistic)
@@ -77,6 +82,35 @@ class CarbonLateDecodeRule extends Rule[LogicalPlan] with PredicateHelper {
       LOGGER.info("Skip CarbonOptimizer")
       plan
     }
+  }
+
+  private def pushDownUDFToJoinLeftRelation(plan: LogicalPlan): LogicalPlan = {
+    val output = plan match {
+      case proj@Project(cols, Join(
+      left, right, jointype: org.apache.spark.sql.catalyst.plans.JoinType, condition)) =>
+        var projectionToBeAdded: Seq[org.apache.spark.sql.catalyst.expressions.Alias] = Seq.empty
+        val newCols = cols.map { col =>
+          col match {
+            case a@Alias(s: ScalaUDF, name)
+              if (name.equalsIgnoreCase(CarbonCommonConstants.POSITION_ID) ||
+                  name.equalsIgnoreCase(
+                    CarbonCommonConstants.CARBON_IMPLICIT_COLUMN_TUPLEID)) =>
+              projectionToBeAdded :+= a
+              AttributeReference(name, StringType, true)().withExprId(a.exprId)
+            case other => other
+          }
+        }
+        val newLeft = left match {
+          case Project(columns, logicalPlan) =>
+            Project(columns ++ projectionToBeAdded, logicalPlan)
+          case filter: Filter =>
+            Project(filter.output ++ projectionToBeAdded, filter)
+          case other => other
+        }
+        Project(newCols, Join(newLeft, right, jointype, condition))
+      case other => other
+    }
+    output
   }
 
   def isOptimized(plan: LogicalPlan): Boolean = {
@@ -144,6 +178,46 @@ class CarbonLateDecodeRule extends Rule[LogicalPlan] with PredicateHelper {
     relations.foreach(_.fillAttributeMap(attrMap))
 
     def addTempDecoder(currentPlan: LogicalPlan): LogicalPlan = {
+
+      def transformAggregateExpression(agg: Aggregate,
+          attrsOnGroup: util.HashSet[AttributeReferenceWrapper] = null): LogicalPlan = {
+        val attrsOndimAggs = new util.HashSet[AttributeReferenceWrapper]
+        if (attrsOnGroup != null) {
+          attrsOndimAggs.addAll(attrsOnGroup)
+        }
+        agg.aggregateExpressions.map {
+          case attr: AttributeReference =>
+          case a@Alias(attr: AttributeReference, name) =>
+          case aggExp: AggregateExpression =>
+            aggExp.transform {
+              case aggExp: AggregateExpression =>
+                collectDimensionAggregates(aggExp, attrsOndimAggs, aliasMap, attrMap)
+                aggExp
+            }
+          case others =>
+            others.collect {
+              case attr: AttributeReference
+                if isDictionaryEncoded(attr, attrMap, aliasMap) =>
+                attrsOndimAggs.add(AttributeReferenceWrapper(aliasMap.getOrElse(attr, attr)))
+            }
+        }
+        var child = agg.child
+        // Incase if the child also aggregate then push down decoder to child
+        if (attrsOndimAggs.size() > 0 && !child.equals(agg)) {
+          child = CarbonDictionaryTempDecoder(attrsOndimAggs,
+            new util.HashSet[AttributeReferenceWrapper](),
+            agg.child)
+        }
+        if (!decoder && attrsOnGroup == null) {
+          decoder = true
+          CarbonDictionaryTempDecoder(new util.HashSet[AttributeReferenceWrapper](),
+            new util.HashSet[AttributeReferenceWrapper](),
+            Aggregate(agg.groupingExpressions, agg.aggregateExpressions, child),
+            isOuter = true)
+        } else {
+          Aggregate(agg.groupingExpressions, agg.aggregateExpressions, child)
+        }
+      }
       currentPlan match {
         case limit@GlobalLimit(_, LocalLimit(_, child: Sort)) =>
           if (!decoder) {
@@ -168,7 +242,21 @@ class CarbonLateDecodeRule extends Rule[LogicalPlan] with PredicateHelper {
           if (attrsOnSort.size() > 0 && !child.isInstanceOf[Sort]) {
             child = CarbonDictionaryTempDecoder(attrsOnSort,
               new util.HashSet[AttributeReferenceWrapper](), sort.child)
+          } else {
+            // In case of select * from query it gets logical relation and there is no way
+            // to convert the datatypes of attributes, so just add this dummy decoder to convert
+            // to dictionary datatypes.
+            child match {
+              case l: LogicalRelation =>
+                child = CarbonDictionaryTempDecoder(new util.HashSet[AttributeReferenceWrapper](),
+                  new util.HashSet[AttributeReferenceWrapper](), sort.child)
+              case Filter(cond, l: LogicalRelation) =>
+                child = CarbonDictionaryTempDecoder(new util.HashSet[AttributeReferenceWrapper](),
+                  new util.HashSet[AttributeReferenceWrapper](), sort.child)
+              case _ =>
+            }
           }
+
           if (!decoder) {
             decoder = true
             CarbonDictionaryTempDecoder(new util.HashSet[AttributeReferenceWrapper](),
@@ -211,39 +299,7 @@ class CarbonLateDecodeRule extends Rule[LogicalPlan] with PredicateHelper {
             Union(children)
           }
         case agg: Aggregate if !agg.child.isInstanceOf[CarbonDictionaryTempDecoder] =>
-          val attrsOndimAggs = new util.HashSet[AttributeReferenceWrapper]
-          agg.aggregateExpressions.map {
-            case attr: AttributeReference =>
-            case a@Alias(attr: AttributeReference, name) =>
-            case aggExp: AggregateExpression =>
-              aggExp.transform {
-                case aggExp: AggregateExpression =>
-                  collectDimensionAggregates(aggExp, attrsOndimAggs, aliasMap, attrMap)
-                  aggExp
-              }
-            case others =>
-              others.collect {
-                case attr: AttributeReference
-                  if isDictionaryEncoded(attr, attrMap, aliasMap) =>
-                  attrsOndimAggs.add(AttributeReferenceWrapper(aliasMap.getOrElse(attr, attr)))
-              }
-          }
-          var child = agg.child
-          // Incase if the child also aggregate then push down decoder to child
-          if (attrsOndimAggs.size() > 0 && !child.equals(agg)) {
-            child = CarbonDictionaryTempDecoder(attrsOndimAggs,
-              new util.HashSet[AttributeReferenceWrapper](),
-              agg.child)
-          }
-          if (!decoder) {
-            decoder = true
-            CarbonDictionaryTempDecoder(new util.HashSet[AttributeReferenceWrapper](),
-              new util.HashSet[AttributeReferenceWrapper](),
-              Aggregate(agg.groupingExpressions, agg.aggregateExpressions, child),
-              isOuter = true)
-          } else {
-            Aggregate(agg.groupingExpressions, agg.aggregateExpressions, child)
-          }
+          transformAggregateExpression(agg)
         case expand: Expand if !expand.child.isInstanceOf[CarbonDictionaryTempDecoder] =>
           val attrsOnExpand = new util.HashSet[AttributeReferenceWrapper]
           expand.projections.map {s =>
@@ -303,7 +359,7 @@ class CarbonLateDecodeRule extends Rule[LogicalPlan] with PredicateHelper {
             Filter(filter.condition, child)
           }
 
-        case j: Join
+         case j: Join
           if !(j.left.isInstanceOf[CarbonDictionaryTempDecoder] ||
                j.right.isInstanceOf[CarbonDictionaryTempDecoder]) =>
           val attrsOnJoin = new util.HashSet[Attribute]
@@ -319,7 +375,7 @@ class CarbonLateDecodeRule extends Rule[LogicalPlan] with PredicateHelper {
 
           val leftCondAttrs = new util.HashSet[AttributeReferenceWrapper]
           val rightCondAttrs = new util.HashSet[AttributeReferenceWrapper]
-          if (attrsOnJoin.size() > 0) {
+          val join = if (attrsOnJoin.size() > 0) {
 
             attrsOnJoin.asScala.map { attr =>
               if (qualifierPresence(j.left, attr)) {
@@ -333,27 +389,42 @@ class CarbonLateDecodeRule extends Rule[LogicalPlan] with PredicateHelper {
             var rightPlan = j.right
             if (leftCondAttrs.size() > 0 &&
                 !leftPlan.isInstanceOf[CarbonDictionaryCatalystDecoder]) {
-              leftPlan = CarbonDictionaryTempDecoder(leftCondAttrs,
-                new util.HashSet[AttributeReferenceWrapper](),
-                j.left)
+              leftPlan = leftPlan match {
+                case agg: Aggregate =>
+                  CarbonDictionaryTempDecoder(leftCondAttrs,
+                    new util.HashSet[AttributeReferenceWrapper](),
+                    transformAggregateExpression(agg, leftCondAttrs))
+                case _ =>
+                  CarbonDictionaryTempDecoder(leftCondAttrs,
+                    new util.HashSet[AttributeReferenceWrapper](),
+                    j.left)
+              }
             }
             if (rightCondAttrs.size() > 0 &&
                 !rightPlan.isInstanceOf[CarbonDictionaryCatalystDecoder]) {
-              rightPlan = CarbonDictionaryTempDecoder(rightCondAttrs,
-                new util.HashSet[AttributeReferenceWrapper](),
-                j.right)
+              rightPlan = rightPlan match {
+                case agg: Aggregate =>
+                  CarbonDictionaryTempDecoder(rightCondAttrs,
+                    new util.HashSet[AttributeReferenceWrapper](),
+                    transformAggregateExpression(agg, rightCondAttrs))
+                case _ =>
+                  CarbonDictionaryTempDecoder(rightCondAttrs,
+                    new util.HashSet[AttributeReferenceWrapper](),
+                    j.right)
+              }
             }
-            if (!decoder) {
-              decoder = true
-              CarbonDictionaryTempDecoder(new util.HashSet[AttributeReferenceWrapper](),
-                new util.HashSet[AttributeReferenceWrapper](),
-                Join(leftPlan, rightPlan, j.joinType, j.condition),
-                isOuter = true)
-            } else {
-              Join(leftPlan, rightPlan, j.joinType, j.condition)
-            }
+            Join(leftPlan, rightPlan, j.joinType, j.condition)
           } else {
             j
+          }
+          if (!decoder) {
+            decoder = true
+            CarbonDictionaryTempDecoder(new util.HashSet[AttributeReferenceWrapper](),
+              new util.HashSet[AttributeReferenceWrapper](),
+              join,
+              isOuter = true)
+          } else {
+            join
           }
 
         case p: Project
@@ -454,7 +525,6 @@ class CarbonLateDecodeRule extends Rule[LogicalPlan] with PredicateHelper {
 
         case others => others
       }
-
     }
 
     val transFormedPlan =
@@ -609,9 +679,16 @@ class CarbonLateDecodeRule extends Rule[LogicalPlan] with PredicateHelper {
     }
     // Remove unnecessary decoders
     val finalPlan = transFormedPlan transform {
-      case CarbonDictionaryCatalystDecoder(_, profile, _, false, child)
-        if profile.isInstanceOf[IncludeProfile] && profile.isEmpty =>
-        child
+      case cd@ CarbonDictionaryCatalystDecoder(_, profile, _, false, child) =>
+        if (profile.isInstanceOf[IncludeProfile] && profile.isEmpty) {
+          child match {
+            case l: LogicalRelation => cd
+            case Filter(condition, l: LogicalRelation) => cd
+            case _ => child
+          }
+        } else {
+          cd
+        }
     }
     finalPlan
   }

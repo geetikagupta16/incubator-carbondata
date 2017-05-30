@@ -166,6 +166,7 @@ public class StoreCreator {
       loadModel.setSegmentId("0");
       loadModel.setPartitionId("0");
       loadModel.setFactTimeStamp(System.currentTimeMillis());
+      loadModel.setMaxColumns("10");
 
       executeGraph(loadModel, absoluteTableIdentifier.getStorePath());
 
@@ -202,6 +203,7 @@ public class StoreCreator {
     date.setColumnUniqueId(UUID.randomUUID().toString());
     date.setDimensionColumn(true);
     date.setColumnGroup(2);
+    date.setSortColumn(true);
     columnSchemas.add(date);
 
     ColumnSchema country = new ColumnSchema();
@@ -212,6 +214,7 @@ public class StoreCreator {
     country.setColumnUniqueId(UUID.randomUUID().toString());
     country.setDimensionColumn(true);
     country.setColumnGroup(3);
+    country.setSortColumn(true);
     columnSchemas.add(country);
 
     ColumnSchema name = new ColumnSchema();
@@ -222,6 +225,7 @@ public class StoreCreator {
     name.setColumnUniqueId(UUID.randomUUID().toString());
     name.setDimensionColumn(true);
     name.setColumnGroup(4);
+    name.setSortColumn(true);
     columnSchemas.add(name);
 
     ColumnSchema phonetype = new ColumnSchema();
@@ -232,6 +236,7 @@ public class StoreCreator {
     phonetype.setColumnUniqueId(UUID.randomUUID().toString());
     phonetype.setDimensionColumn(true);
     phonetype.setColumnGroup(5);
+    phonetype.setSortColumn(true);
     columnSchemas.add(phonetype);
 
     ColumnSchema serialname = new ColumnSchema();
@@ -242,6 +247,7 @@ public class StoreCreator {
     serialname.setColumnUniqueId(UUID.randomUUID().toString());
     serialname.setDimensionColumn(true);
     serialname.setColumnGroup(6);
+    serialname.setSortColumn(true);
     columnSchemas.add(serialname);
 
     ColumnSchema salary = new ColumnSchema();
@@ -265,7 +271,6 @@ public class StoreCreator {
     tableInfo.setLastUpdatedTime(System.currentTimeMillis());
     tableInfo.setFactTable(tableSchema);
     tableInfo.setAggregateTableList(new ArrayList<TableSchema>());
-
     CarbonTablePath carbonTablePath = CarbonStorePath
         .getCarbonTablePath(absoluteTableIdentifier.getStorePath(),
             absoluteTableIdentifier.getCarbonTableIdentifier());
@@ -377,8 +382,6 @@ public class StoreCreator {
     CarbonProperties.getInstance().addProperty("is.compressed.keyblock", "false");
     CarbonProperties.getInstance().addProperty("carbon.leaf.node.size", "120000");
 
-    String fileNamePrefix = "";
-
     String graphPath =
         outPutLoc + File.separator + loadModel.getDatabaseName() + File.separator + tableName
             + File.separator + 0 + File.separator + 1 + File.separator + tableName + ".ktr";
@@ -399,6 +402,8 @@ public class StoreCreator {
     CSVInputFormat.setReadBufferSize(configuration, CarbonProperties.getInstance()
         .getProperty(CarbonCommonConstants.CSV_READ_BUFFER_SIZE,
             CarbonCommonConstants.CSV_READ_BUFFER_SIZE_DEFAULT));
+    CSVInputFormat.setNumberOfColumns(configuration, String.valueOf(loadModel.getCsvHeaderColumns().length));
+    CSVInputFormat.setMaxColumns(configuration, "10");
 
     TaskAttemptContextImpl hadoopAttemptContext = new TaskAttemptContextImpl(configuration, new TaskAttemptID("", 1, TaskType.MAP, 0, 0));
     CSVInputFormat format = new CSVInputFormat();
@@ -414,11 +419,6 @@ public class StoreCreator {
     info.setDatabaseName(databaseName);
     info.setTableName(tableName);
 
-//    DataGraphExecuter graphExecuter = new DataGraphExecuter(dataProcessTaskStatus);
-//    graphExecuter
-//        .executeGraph(graphPath, info, loadModel.getSchema());
-    //    LoadMetadataDetails[] loadDetails =
-    //        CarbonUtil.readLoadMetadata(loadModel.schema.getCarbonTable().getMetaDataFilepath());
     writeLoadMetadata(loadModel.getCarbonDataLoadSchema(), loadModel.getTableName(), loadModel.getTableName(),
         new ArrayList<LoadMetadataDetails>());
 

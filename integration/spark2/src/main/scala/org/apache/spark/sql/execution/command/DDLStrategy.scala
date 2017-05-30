@@ -16,7 +16,8 @@
  */
 package org.apache.spark.sql.execution.command
 
-import org.apache.spark.sql.{CarbonEnv, ShowLoadsCommand, SparkSession}
+import org.apache.spark.sql.{CarbonDatasourceHadoopRelation, CarbonEnv, InsertIntoCarbonTable,
+ShowLoadsCommand, SparkSession}
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.analysis.UnresolvedRelation
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
@@ -33,34 +34,40 @@ class DDLStrategy(sparkSession: SparkSession) extends SparkStrategy {
   def apply(plan: LogicalPlan): Seq[SparkPlan] = {
     plan match {
       case LoadDataCommand(identifier, path, isLocal, isOverwrite, partition)
-        if CarbonEnv.get.carbonMetastore.tableExists(identifier)(sparkSession) =>
+        if CarbonEnv.getInstance(sparkSession).carbonMetastore
+          .tableExists(identifier)(sparkSession) =>
         ExecutedCommandExec(LoadTable(identifier.database, identifier.table.toLowerCase, path,
           Seq(), Map(), isOverwrite)) :: Nil
       case alter@AlterTableRenameCommand(oldTableIdentifier, newTableIdentifier, _) =>
-        val isCarbonTable = CarbonEnv.get.carbonMetastore
-          .tableExists(oldTableIdentifier)(
+        val dbOption = oldTableIdentifier.database.map(_.toLowerCase)
+        val tableIdentifier = TableIdentifier(oldTableIdentifier.table.toLowerCase(), dbOption)
+        val isCarbonTable = CarbonEnv.getInstance(sparkSession).carbonMetastore
+          .tableExists(tableIdentifier)(
             sparkSession)
         if (isCarbonTable) {
-          val renameModel = AlterTableRenameModel(oldTableIdentifier, newTableIdentifier)
+          val renameModel = AlterTableRenameModel(tableIdentifier, newTableIdentifier)
           ExecutedCommandExec(AlterTableRenameTable(renameModel)) :: Nil
         } else {
           ExecutedCommandExec(alter) :: Nil
         }
       case DropTableCommand(identifier, ifNotExists, isView, _)
-        if CarbonEnv.get.carbonMetastore
+        if CarbonEnv.getInstance(sparkSession).carbonMetastore
           .isTablePathExists(identifier)(sparkSession) =>
         ExecutedCommandExec(
           CarbonDropTableCommand(ifNotExists, identifier.database,
             identifier.table.toLowerCase)) :: Nil
       case ShowLoadsCommand(databaseName, table, limit) =>
         ExecutedCommandExec(ShowLoads(databaseName, table.toLowerCase, limit, plan.output)) :: Nil
+      case InsertIntoCarbonTable(relation: CarbonDatasourceHadoopRelation,
+      _, child: LogicalPlan, _, _) =>
+        ExecutedCommandExec(LoadTableByInsert(relation, child)) :: Nil
       case createDb@CreateDatabaseCommand(dbName, ifNotExists, _, _, _) =>
-        CarbonEnv.get.carbonMetastore.createDatabaseDirectory(dbName)
+        CarbonEnv.getInstance(sparkSession).carbonMetastore.createDatabaseDirectory(dbName)
         ExecutedCommandExec(createDb) :: Nil
       case drop@DropDatabaseCommand(dbName, ifExists, isCascade) =>
         ExecutedCommandExec(CarbonDropDatabaseCommand(drop)) :: Nil
       case alterTable@AlterTableCompaction(altertablemodel) =>
-        val isCarbonTable = CarbonEnv.get.carbonMetastore
+        val isCarbonTable = CarbonEnv.getInstance(sparkSession).carbonMetastore
           .tableExists(TableIdentifier(altertablemodel.tableName,
             altertablemodel.dbName))(sparkSession)
         if (isCarbonTable) {
@@ -72,10 +79,11 @@ class DDLStrategy(sparkSession: SparkSession) extends SparkStrategy {
               "Unsupported alter operation on carbon table")
           }
         } else {
-          throw new MalformedCarbonCommandException("Unsupported alter operation on hive table")
+          throw new MalformedCarbonCommandException(
+            "Operation not allowed : " + altertablemodel.alterSql)
         }
       case dataTypeChange@AlterTableDataTypeChange(alterTableChangeDataTypeModel) =>
-        val isCarbonTable = CarbonEnv.get.carbonMetastore
+        val isCarbonTable = CarbonEnv.getInstance(sparkSession).carbonMetastore
           .tableExists(TableIdentifier(alterTableChangeDataTypeModel.tableName,
             alterTableChangeDataTypeModel.databaseName))(sparkSession)
         if (isCarbonTable) {
@@ -84,7 +92,7 @@ class DDLStrategy(sparkSession: SparkSession) extends SparkStrategy {
           throw new MalformedCarbonCommandException("Unsupported alter operation on hive table")
         }
       case addColumn@AlterTableAddColumns(alterTableAddColumnsModel) =>
-        val isCarbonTable = CarbonEnv.get.carbonMetastore
+        val isCarbonTable = CarbonEnv.getInstance(sparkSession).carbonMetastore
           .tableExists(TableIdentifier(alterTableAddColumnsModel.tableName,
             alterTableAddColumnsModel.databaseName))(sparkSession)
         if (isCarbonTable) {
@@ -93,7 +101,7 @@ class DDLStrategy(sparkSession: SparkSession) extends SparkStrategy {
           throw new MalformedCarbonCommandException("Unsupported alter operation on hive table")
         }
       case dropColumn@AlterTableDropColumns(alterTableDropColumnModel) =>
-        val isCarbonTable = CarbonEnv.get.carbonMetastore
+        val isCarbonTable = CarbonEnv.getInstance(sparkSession).carbonMetastore
           .tableExists(TableIdentifier(alterTableDropColumnModel.tableName,
             alterTableDropColumnModel.databaseName))(sparkSession)
         if (isCarbonTable) {
@@ -102,7 +110,9 @@ class DDLStrategy(sparkSession: SparkSession) extends SparkStrategy {
           throw new MalformedCarbonCommandException("Unsupported alter operation on hive table")
         }
       case desc@DescribeTableCommand(identifier, partitionSpec, isExtended, isFormatted)
-        if CarbonEnv.get.carbonMetastore.tableExists(identifier)(sparkSession) && isFormatted =>
+        if
+        CarbonEnv.getInstance(sparkSession).carbonMetastore
+          .tableExists(identifier)(sparkSession) && isFormatted =>
         val resolvedTable =
           sparkSession.sessionState.executePlan(UnresolvedRelation(identifier, None)).analyzed
         val resultPlan = sparkSession.sessionState.executePlan(resolvedTable).executedPlan

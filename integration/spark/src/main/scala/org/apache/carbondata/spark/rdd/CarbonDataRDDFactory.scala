@@ -17,6 +17,7 @@
 
 package org.apache.carbondata.spark.rdd
 
+import java.text.SimpleDateFormat
 import java.util
 import java.util.UUID
 import java.util.concurrent._
@@ -28,10 +29,11 @@ import scala.util.control.Breaks._
 
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
+import org.apache.hadoop.io.NullWritable
 import org.apache.hadoop.mapreduce.Job
 import org.apache.hadoop.mapreduce.lib.input.{FileInputFormat, FileSplit}
 import org.apache.spark.{SparkEnv, SparkException}
-import org.apache.spark.rdd.{DataLoadCoalescedRDD, DataLoadPartitionCoalescer, UpdateCoalescedRDD}
+import org.apache.spark.rdd.{DataLoadCoalescedRDD, DataLoadPartitionCoalescer, NewHadoopRDD, RDD, UpdateCoalescedRDD}
 import org.apache.spark.sql.{CarbonEnv, DataFrame, Row, SQLContext}
 import org.apache.spark.sql.execution.command.{AlterTableModel, CompactionModel, ExecutionErrors, UpdateTableModel}
 import org.apache.spark.sql.hive.DistributionUtil
@@ -43,20 +45,23 @@ import org.apache.carbondata.core.datastore.block.{Distributable, TableBlockInfo
 import org.apache.carbondata.core.dictionary.server.DictionaryServer
 import org.apache.carbondata.core.locks.{CarbonLockFactory, ICarbonLock, LockUsage}
 import org.apache.carbondata.core.metadata.{CarbonTableIdentifier, ColumnarFormatVersion}
+import org.apache.carbondata.core.metadata.datatype.DataType
+import org.apache.carbondata.core.metadata.schema.partition.PartitionType
 import org.apache.carbondata.core.metadata.schema.table.CarbonTable
 import org.apache.carbondata.core.mutate.CarbonUpdateUtil
+import org.apache.carbondata.core.scan.partition.PartitionUtil
 import org.apache.carbondata.core.statusmanager.LoadMetadataDetails
-import org.apache.carbondata.core.util.CarbonProperties
+import org.apache.carbondata.core.util.{ByteUtil, CarbonProperties}
 import org.apache.carbondata.core.util.path.CarbonStorePath
-import org.apache.carbondata.processing.csvload.BlockDetails
+import org.apache.carbondata.processing.csvload.{BlockDetails, CSVInputFormat, StringArrayWritable}
 import org.apache.carbondata.processing.etl.DataLoadingException
+import org.apache.carbondata.processing.merger.{CarbonCompactionUtil, CarbonDataMergerUtil, CompactionType}
 import org.apache.carbondata.processing.model.CarbonLoadModel
 import org.apache.carbondata.processing.newflow.exception.CarbonDataLoadingException
 import org.apache.carbondata.spark._
 import org.apache.carbondata.spark.load._
-import org.apache.carbondata.spark.merger.{CarbonCompactionUtil, CarbonDataMergerUtil, CompactionType}
 import org.apache.carbondata.spark.splits.TableSplit
-import org.apache.carbondata.spark.util.{CarbonQueryUtil, CommonUtil}
+import org.apache.carbondata.spark.util.{CarbonQueryUtil, CarbonScalaUtil, CommonUtil}
 
 /**
  * This is the factory class which can create different RDD depends on user needs.
@@ -82,9 +87,6 @@ object CarbonDataRDDFactory {
       if (alterTableModel.segmentUpdateStatusManager.get != None) {
         carbonLoadModel
           .setSegmentUpdateStatusManager((alterTableModel.segmentUpdateStatusManager.get))
-        carbonLoadModel
-          .setSegmentUpdateDetails(alterTableModel.segmentUpdateStatusManager.get
-            .getUpdateStatusDetails.toList.asJava)
         carbonLoadModel
           .setLoadMetadataDetails(alterTableModel.segmentUpdateStatusManager.get
             .getLoadMetadataDetails.toList.asJava)
@@ -347,7 +349,7 @@ object CarbonDataRDDFactory {
       storePath: String,
       columnar: Boolean,
       partitionStatus: String = CarbonCommonConstants.STORE_LOADSTATUS_SUCCESS,
-      result: Future[DictionaryServer],
+      result: Option[DictionaryServer],
       dataFrame: Option[DataFrame] = None,
       updateModel: Option[UpdateTableModel] = None): Unit = {
     val carbonTable = carbonLoadModel.getCarbonDataLoadSchema.getCarbonTable
@@ -436,7 +438,7 @@ object CarbonDataRDDFactory {
           s" ${ carbonLoadModel.getDatabaseName }.${ carbonLoadModel.getTableName }")
       // Check if any load need to be deleted before loading new data
       DataManagementFunc.deleteLoadsAndUpdateMetadata(carbonLoadModel.getDatabaseName,
-        carbonLoadModel.getTableName, storePath, isForceDeletion = false)
+        carbonLoadModel.getTableName, storePath, false, carbonTable)
       if (null == carbonLoadModel.getLoadMetadataDetails) {
         CommonUtil.readLoadMetadataDetails(carbonLoadModel, storePath)
       }
@@ -732,6 +734,23 @@ object CarbonDataRDDFactory {
 
       }
 
+      def loadDataForPartitionTable(): Unit = {
+        try {
+          val rdd = repartitionInputData(sqlContext, dataFrame, carbonLoadModel)
+          status = new PartitionTableDataLoaderRDD(sqlContext.sparkContext,
+            new DataLoadResultImpl(),
+            carbonLoadModel,
+            currentLoadCount,
+            tableCreationTime,
+            schemaLastUpdatedTime,
+            rdd).collect()
+        } catch {
+          case ex: Exception =>
+            LOGGER.error(ex, "load data failed for partition table")
+            throw ex
+        }
+      }
+
       if (!updateModel.isDefined) {
       CarbonLoaderUtil.checkAndCreateCarbonDataLocation(storePath,
         carbonLoadModel.getDatabaseName, carbonLoadModel.getTableName, currentLoadCount.toString)
@@ -742,10 +761,11 @@ object CarbonDataRDDFactory {
       try {
         if (updateModel.isDefined) {
           loadDataFrameForUpdate()
+        } else if (carbonTable.getPartitionInfo(carbonTable.getFactTableName) != null) {
+          loadDataForPartitionTable()
         } else if (dataFrame.isDefined) {
           loadDataFrame()
-        }
-        else {
+        } else {
           loadDataFile()
         }
         if (updateModel.isDefined) {
@@ -826,7 +846,11 @@ object CarbonDataRDDFactory {
       // updateModel.get.executorErrors.errorMsg = errorMessage
           if (updateModel.get.executorErrors.failureCauses == FailureCauses.NONE) {
             updateModel.get.executorErrors.failureCauses = FailureCauses.EXECUTOR_FAILURE
-            updateModel.get.executorErrors.errorMsg = "Update failed as the data load has failed."
+            if (null != executorMessage && !executorMessage.isEmpty) {
+              updateModel.get.executorErrors.errorMsg = executorMessage
+            } else {
+              updateModel.get.executorErrors.errorMsg = "Update failed as the data load has failed."
+            }
           }
           return
         }
@@ -886,30 +910,27 @@ object CarbonDataRDDFactory {
         LOGGER.audit(s"Data load is failed for " +
             s"${ carbonLoadModel.getDatabaseName }.${ carbonLoadModel.getTableName }")
         LOGGER.warn("Cannot write load metadata file as data load failed")
-        shutDownDictionaryServer(carbonLoadModel, result, false)
         throw new Exception(errorMessage)
       } else {
         val metadataDetails = status(0)._2
         if (!isAgg) {
-          val status = CarbonLoaderUtil.recordLoadMetadata(currentLoadCount, metadataDetails,
-            carbonLoadModel, loadStatus, loadStartTime)
-          if (!status) {
-            val errorMessage = "Dataload failed due to failure in table status updation."
-            LOGGER.audit("Data load is failed for " +
-                s"${ carbonLoadModel.getDatabaseName }.${
-                  carbonLoadModel
-                      .getTableName
-                }")
-            LOGGER.error("Dataload failed due to failure in table status updation.")
-            shutDownDictionaryServer(carbonLoadModel, result, false)
-            throw new Exception(errorMessage)
-          }
+            writeDictionary(carbonLoadModel, result, false)
+            val status = CarbonLoaderUtil.recordLoadMetadata(currentLoadCount, metadataDetails,
+              carbonLoadModel, loadStatus, loadStartTime)
+            if (!status) {
+              val errorMessage = "Dataload failed due to failure in table status updation."
+              LOGGER.audit("Data load is failed for " +
+                           s"${ carbonLoadModel.getDatabaseName }.${
+                             carbonLoadModel
+                               .getTableName
+                           }")
+              LOGGER.error("Dataload failed due to failure in table status updation.")
+              throw new Exception(errorMessage)
+            }
         } else if (!carbonLoadModel.isRetentionRequest) {
           // TODO : Handle it
           LOGGER.info("********Database updated**********")
         }
-
-        shutDownDictionaryServer(carbonLoadModel, result)
 
         if (CarbonCommonConstants.STORE_LOADSTATUS_PARTIAL_SUCCESS.equals(loadStatus)) {
           LOGGER.audit("Data load is partially successful for " +
@@ -931,22 +952,105 @@ object CarbonDataRDDFactory {
 
   }
 
-  private def shutDownDictionaryServer(carbonLoadModel: CarbonLoadModel,
-      result: Future[DictionaryServer], writeDictionary: Boolean = true): Unit = {
-    // write dictionary file and shutdown dictionary server
-    if (carbonLoadModel.getUseOnePass) {
-      try {
-        val server = result.get()
-        if (writeDictionary) {
-          server.writeDictionary()
-        }
-        server.shutdown()
-      } catch {
-        case ex: Exception =>
-          LOGGER.error("Error while close dictionary server and write dictionary file for " +
-                       s"${ carbonLoadModel.getDatabaseName }.${ carbonLoadModel.getTableName }")
-          throw new Exception("Dataload failed due to error while write dictionary file!")
+  /**
+   * repartition the input data for partiton table.
+   * @param sqlContext
+   * @param dataFrame
+   * @param carbonLoadModel
+   * @return
+   */
+  private def repartitionInputData(sqlContext: SQLContext,
+      dataFrame: Option[DataFrame],
+      carbonLoadModel: CarbonLoadModel): RDD[Row] = {
+    val carbonTable = carbonLoadModel.getCarbonDataLoadSchema.getCarbonTable
+    val partitionInfo = carbonTable.getPartitionInfo(carbonTable.getFactTableName)
+    val partitionColumn = partitionInfo.getColumnSchemaList.get(0).getColumnName
+    val partitionColumnDataType = partitionInfo.getColumnSchemaList.get(0).getDataType
+    val columns = carbonLoadModel.getCsvHeaderColumns
+    var partitionColumnIndex = -1
+    for (i <- 0 until columns.length) {
+      if (partitionColumn.equals(columns(i))) {
+        partitionColumnIndex = i
       }
     }
+    if (partitionColumnIndex == -1) {
+      throw new DataLoadingException("Partition column not found.")
+    }
+    // generate RDD[(K, V)] to use the partitionBy method of PairRDDFunctions
+    val inputRDD: RDD[(String, Row)] = if (dataFrame.isDefined) {
+      // input data from DataFrame
+      val timestampFormatString = CarbonProperties.getInstance().getProperty(CarbonCommonConstants
+        .CARBON_TIMESTAMP_FORMAT, CarbonCommonConstants.CARBON_TIMESTAMP_DEFAULT_FORMAT)
+      val timeStampFormat = new SimpleDateFormat(timestampFormatString)
+      val dateFormatString = CarbonProperties.getInstance().getProperty(CarbonCommonConstants
+        .CARBON_DATE_FORMAT, CarbonCommonConstants.CARBON_DATE_DEFAULT_FORMAT)
+      val dateFormat = new SimpleDateFormat(dateFormatString)
+      val delimiterLevel1 = carbonLoadModel.getComplexDelimiterLevel1
+      val delimiterLevel2 = carbonLoadModel.getComplexDelimiterLevel2
+      val serializationNullFormat =
+        carbonLoadModel.getSerializationNullFormat.split(CarbonCommonConstants.COMMA, 2)(1)
+      dataFrame.get.rdd.map { row =>
+        (CarbonScalaUtil.getString(row.get(partitionColumnIndex), serializationNullFormat,
+          delimiterLevel1, delimiterLevel2, timeStampFormat, dateFormat), row)
+      }
+    } else {
+      // input data from csv files
+      val hadoopConfiguration = new Configuration()
+      CommonUtil.configureCSVInputFormat(hadoopConfiguration, carbonLoadModel)
+      hadoopConfiguration.set(FileInputFormat.INPUT_DIR, carbonLoadModel.getFactFilePath)
+      val columnCount = columns.length
+      new NewHadoopRDD[NullWritable, StringArrayWritable](
+        sqlContext.sparkContext,
+        classOf[CSVInputFormat],
+        classOf[NullWritable],
+        classOf[StringArrayWritable],
+        hadoopConfiguration
+      ).map { currentRow =>
+        val row = new StringArrayRow(new Array[String](columnCount))
+        (currentRow._2.get()(partitionColumnIndex), row.setValues(currentRow._2.get()))
+      }
+    }
+
+    val partitioner = PartitionFactory.getPartitioner(partitionInfo)
+    if (partitionColumnDataType == DataType.STRING) {
+      if (partitionInfo.getPartitionType == PartitionType.RANGE) {
+        inputRDD.map { row => (ByteUtil.toBytes(row._1), row._2) }
+          .partitionBy(partitioner)
+          .map(_._2)
+      } else {
+        inputRDD.partitionBy(partitioner)
+          .map(_._2)
+      }
+    } else {
+      inputRDD.map { row =>
+        (PartitionUtil.getDataBasedOnDataType(row._1, partitionColumnDataType), row._2)
+      }
+        .partitionBy(partitioner)
+        .map(_._2)
+    }
   }
+
+    private def writeDictionary(carbonLoadModel: CarbonLoadModel,
+        result: Option[DictionaryServer], writeAll: Boolean) = {
+    // write dictionary file and shutdown dictionary server
+    val uniqueTableName: String = s"${ carbonLoadModel.getDatabaseName }_${
+      carbonLoadModel.getTableName }"
+    result match {
+      case Some(server) =>
+        try {
+          if (writeAll) {
+            server.writeDictionary()
+          }
+          else {
+            server.writeTableDictionary(uniqueTableName)
+          }
+        } catch {
+          case ex: Exception =>
+            LOGGER.error(s"Error while writing dictionary file for $uniqueTableName")
+            throw new Exception("Dataload failed due to error while writing dictionary file!")
+        }
+      case _ =>
+    }
+  }
+
 }

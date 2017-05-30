@@ -33,21 +33,20 @@ import org.apache.carbondata.core.util.CarbonUtil;
 import org.apache.carbondata.hadoop.readsupport.CarbonReadSupport;
 
 import org.apache.hadoop.mapreduce.InputSplit;
-import org.apache.hadoop.mapreduce.RecordReader;
 import org.apache.hadoop.mapreduce.TaskAttemptContext;
 
 /**
  * Reads the data from Carbon store.
  */
-public class CarbonRecordReader<T> extends RecordReader<Void, T> {
+public class CarbonRecordReader<T> extends AbstractRecordReader<T> {
 
-  private QueryModel queryModel;
+  protected QueryModel queryModel;
 
-  private CarbonReadSupport<T> readSupport;
+  protected CarbonReadSupport<T> readSupport;
 
-  private CarbonIterator<Object[]> carbonIterator;
+  protected CarbonIterator<Object[]> carbonIterator;
 
-  private QueryExecutor queryExecutor;
+  protected QueryExecutor queryExecutor;
 
   public CarbonRecordReader(QueryModel queryModel, CarbonReadSupport<T> readSupport) {
     this.queryModel = queryModel;
@@ -92,6 +91,7 @@ public class CarbonRecordReader<T> extends RecordReader<Void, T> {
   }
 
   @Override public T getCurrentValue() throws IOException, InterruptedException {
+    rowCount += 1;
     return readSupport.readRow(carbonIterator.next());
   }
 
@@ -101,6 +101,7 @@ public class CarbonRecordReader<T> extends RecordReader<Void, T> {
   }
 
   @Override public void close() throws IOException {
+    logStatistics(rowCount, queryModel.getStatisticsRecorder());
     // clear dictionary cache
     Map<String, Dictionary> columnToDictionaryMapping = queryModel.getColumnToDictionaryMapping();
     if (null != columnToDictionaryMapping) {

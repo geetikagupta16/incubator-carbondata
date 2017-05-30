@@ -27,11 +27,12 @@ import org.scalatest.BeforeAndAfterAll
 class TestLoadDataFrame extends QueryTest with BeforeAndAfterAll {
   var df: DataFrame = _
   var dataFrame: DataFrame = _
+  var df2: DataFrame = _
 
 
   def buildTestData() = {
     import sqlContext.implicits._
-    df = sqlContext.sparkContext.parallelize(1 to 1000)
+    df = sqlContext.sparkContext.parallelize(1 to 32000)
       .map(x => ("a", "b", x))
       .toDF("c1", "c2", "c3")
 
@@ -45,6 +46,9 @@ class TestLoadDataFrame extends QueryTest with BeforeAndAfterAll {
       StructField("string", StringType, nullable = false) :: Nil)
 
     dataFrame = sqlContext.createDataFrame(rdd, schema)
+    df2 = sqlContext.sparkContext.parallelize(1 to 1000)
+      .map(x => ("key_" + x, "str_" + x, x, x * 2, x * 3))
+      .toDF("c1", "c2", "c3", "c4", "c5")
   }
 
   def dropTable() = {
@@ -52,7 +56,11 @@ class TestLoadDataFrame extends QueryTest with BeforeAndAfterAll {
     sql("DROP TABLE IF EXISTS carbon2")
     sql("DROP TABLE IF EXISTS carbon3")
     sql("DROP TABLE IF EXISTS carbon4")
-
+    sql("DROP TABLE IF EXISTS carbon5")
+    sql("DROP TABLE IF EXISTS carbon6")
+    sql("DROP TABLE IF EXISTS carbon7")
+    sql("DROP TABLE IF EXISTS carbon8")
+    sql("DROP TABLE IF EXISTS carbon9")
   }
 
 
@@ -61,6 +69,8 @@ class TestLoadDataFrame extends QueryTest with BeforeAndAfterAll {
     dropTable
     buildTestData
   }
+
+
 
   test("test load dataframe with saving compressed csv files") {
     // save dataframe to carbon file
@@ -72,7 +82,7 @@ class TestLoadDataFrame extends QueryTest with BeforeAndAfterAll {
       .mode(SaveMode.Overwrite)
       .save()
     checkAnswer(
-      sql("select count(*) from carbon1 where c3 > 500"), Row(500)
+      sql("select count(*) from carbon1 where c3 > 500"), Row(31500)
     )
   }
 
@@ -86,7 +96,7 @@ class TestLoadDataFrame extends QueryTest with BeforeAndAfterAll {
       .mode(SaveMode.Overwrite)
       .save()
     checkAnswer(
-      sql("select count(*) from carbon2 where c3 > 500"), Row(500)
+      sql("select count(*) from carbon2 where c3 > 500"), Row(31500)
     )
   }
 
@@ -99,7 +109,7 @@ class TestLoadDataFrame extends QueryTest with BeforeAndAfterAll {
       .mode(SaveMode.Overwrite)
       .save()
     checkAnswer(
-      sql("select count(*) from carbon3 where c3 > 500"), Row(500)
+      sql("select count(*) from carbon3 where c3 > 500"), Row(31500)
     )
   }
 
@@ -112,6 +122,81 @@ class TestLoadDataFrame extends QueryTest with BeforeAndAfterAll {
       .save()
     checkAnswer(
       sql("SELECT decimal FROM carbon4"),Seq(Row(BigDecimal.valueOf(10000.00)),Row(BigDecimal.valueOf(1234.44))))
+  }
+
+  test("test loading data if the data count is multiple of page size"){
+    checkAnswer(
+      sql("SELECT count(*) FROM carbon2"),Seq(Row(32000)))
+  }
+
+  test("test load dataframe with integer columns included in the dictionary"){
+    df2.write
+      .format("carbondata")
+      .option("tableName", "carbon5")
+      .option("compress", "true")
+      .option("dictionary_include","c3,c4")
+      .mode(SaveMode.Overwrite)
+      .save()
+    checkAnswer(
+      sql("select count(*) from carbon5 where c3 > 300"), Row(700)
+    )
+  }
+
+  test("test load dataframe with string column excluded from the dictionary"){
+    df2.write
+      .format("carbondata")
+      .option("tableName", "carbon6")
+      .option("compress", "true")
+      .option("dictionary_exclude","c2")
+      .mode(SaveMode.Overwrite)
+      .save()
+    checkAnswer(
+      sql("select count(*) from carbon6 where c3 > 300"), Row(700)
+    )
+  }
+
+  test("test load dataframe with both dictionary include and exclude specified"){
+    df2.write
+      .format("carbondata")
+      .option("tableName", "carbon7")
+      .option("compress", "true")
+      .option("dictionary_include","c3,c4")
+      .option("dictionary_exclude","c2")
+      .mode(SaveMode.Overwrite)
+      .save()
+    checkAnswer(
+      sql("select count(*) from carbon7 where c3 > 300"), Row(700)
+    )
+  }
+
+  test("test load dataframe with single pass enabled") {
+    // save dataframe to carbon file
+    df2.write
+      .format("carbondata")
+      .option("tableName", "carbon8")
+      .option("tempCSV", "false")
+      .option("single_pass", "true")
+      .option("compress", "false")
+      .mode(SaveMode.Overwrite)
+      .save()
+    checkAnswer(
+      sql("select count(*) from carbon8 where c3 > 500"), Row(500)
+    )
+  }
+
+  test("test load dataframe with single pass disabled") {
+    // save dataframe to carbon file
+    df2.write
+      .format("carbondata")
+      .option("tableName", "carbon9")
+      .option("tempCSV", "true")
+      .option("single_pass", "false")
+      .option("compress", "false")
+      .mode(SaveMode.Overwrite)
+      .save()
+    checkAnswer(
+      sql("select count(*) from carbon9 where c3 > 500"), Row(500)
+    )
   }
 
   override def afterAll {

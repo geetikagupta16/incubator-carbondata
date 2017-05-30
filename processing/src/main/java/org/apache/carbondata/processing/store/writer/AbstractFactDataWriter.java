@@ -72,9 +72,7 @@ import org.apache.carbondata.processing.store.writer.exception.CarbonDataWriterE
 import org.apache.commons.lang3.ArrayUtils;
 import org.apache.hadoop.io.IOUtils;
 
-public abstract class AbstractFactDataWriter<T> implements CarbonFactDataWriter<T>
-
-{
+public abstract class AbstractFactDataWriter<T> implements CarbonFactDataWriter<T> {
 
   private static final LogService LOGGER =
       LogServiceFactory.getLogService(AbstractFactDataWriter.class.getName());
@@ -141,10 +139,6 @@ public abstract class AbstractFactDataWriter<T> implements CarbonFactDataWriter<
    * file size at any given point
    */
   private long currentFileSize;
-  /**
-   * size reserved in one file for writing block meta data. It will be in percentage
-   */
-  private int spaceReservedForBlockMetaSize;
 
   protected FileOutputStream fileOutputStream;
 
@@ -171,7 +165,10 @@ public abstract class AbstractFactDataWriter<T> implements CarbonFactDataWriter<
     this.fileSizeInBytes =
         (long) dataWriterVo.getTableBlocksize() * CarbonCommonConstants.BYTE_TO_KB_CONVERSION_FACTOR
             * CarbonCommonConstants.BYTE_TO_KB_CONVERSION_FACTOR;
-    this.spaceReservedForBlockMetaSize = Integer.parseInt(propInstance
+    /*
+    size reserved in one file for writing block meta data. It will be in percentage
+   */
+    int spaceReservedForBlockMetaSize = Integer.parseInt(propInstance
         .getProperty(CarbonCommonConstants.CARBON_BLOCK_META_RESERVED_SPACE,
             CarbonCommonConstants.CARBON_BLOCK_META_RESERVED_SPACE_DEFAULT));
     this.dataBlockSize = fileSizeInBytes - (fileSizeInBytes * spaceReservedForBlockMetaSize) / 100;
@@ -296,7 +293,7 @@ public abstract class AbstractFactDataWriter<T> implements CarbonFactDataWriter<
     this.carbonDataFileName = carbonTablePath
         .getCarbonDataFileName(fileCount, dataWriterVo.getCarbonDataFileAttributes().getTaskId(),
             dataWriterVo.getBucketNumber(), dataWriterVo.getTaskExtension(),
-            dataWriterVo.getCarbonDataFileAttributes().getFactTimeStamp());
+            "" + dataWriterVo.getCarbonDataFileAttributes().getFactTimeStamp());
     String actualFileNameVal = carbonDataFileName + CarbonCommonConstants.FILE_INPROGRESS_STATUS;
     FileData fileData = new FileData(actualFileNameVal, dataWriterVo.getStoreLocation());
     dataWriterVo.getFileManager().add(fileData);
@@ -447,7 +444,7 @@ public abstract class AbstractFactDataWriter<T> implements CarbonFactDataWriter<
     String fileName = dataWriterVo.getStoreLocation() + File.separator + carbonTablePath
         .getCarbonIndexFileName(dataWriterVo.getCarbonDataFileAttributes().getTaskId(),
             dataWriterVo.getBucketNumber(), dataWriterVo.getTaskExtension(),
-            dataWriterVo.getCarbonDataFileAttributes().getFactTimeStamp());
+            "" + dataWriterVo.getCarbonDataFileAttributes().getFactTimeStamp());
     CarbonIndexFileWriter writer = new CarbonIndexFileWriter();
     // open file
     writer.openThriftWriter(fileName);

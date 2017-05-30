@@ -19,7 +19,6 @@ package org.apache.carbondata.spark.readsupport;
 import java.io.IOException;
 
 import org.apache.carbondata.core.metadata.AbsoluteTableIdentifier;
-import org.apache.carbondata.core.metadata.datatype.DataType;
 import org.apache.carbondata.core.metadata.schema.table.column.CarbonColumn;
 import org.apache.carbondata.hadoop.readsupport.impl.DictionaryDecodeReadSupport;
 
@@ -30,23 +29,9 @@ public class SparkRowReadSupportImpl extends DictionaryDecodeReadSupport<Interna
 
   @Override public void initialize(CarbonColumn[] carbonColumns,
       AbsoluteTableIdentifier absoluteTableIdentifier) throws IOException {
-    super.initialize(carbonColumns, absoluteTableIdentifier);
-    //can initialize and generate schema here.
   }
 
   @Override public InternalRow readRow(Object[] data) {
-    for (int i = 0; i < dictionaries.length; i++) {
-      if (data[i] == null) {
-        continue;
-      }
-      if (dictionaries[i] == null) {
-        if (dataTypes[i].equals(DataType.INT)) {
-          data[i] = ((Long)(data[i])).intValue();
-        } else if (dataTypes[i].equals(DataType.SHORT)) {
-          data[i] = ((Long)(data[i])).shortValue();
-        }
-      }
-    }
     return new GenericInternalRow(data);
   }
 }

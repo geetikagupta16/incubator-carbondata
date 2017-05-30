@@ -20,8 +20,8 @@ package org.apache.carbondata.processing.sortandgroupby.sortdata;
 import java.nio.ByteBuffer;
 import java.util.Comparator;
 
-import org.apache.carbondata.core.constants.IgnoreDictionary;
 import org.apache.carbondata.core.util.ByteUtil.UnsafeComparer;
+import org.apache.carbondata.processing.newflow.row.WriteStepRowUtil;
 import org.apache.carbondata.processing.util.NonDictionaryUtil;
 
 public class RowComparator implements Comparator<Object[]> {
@@ -33,15 +33,15 @@ public class RowComparator implements Comparator<Object[]> {
   /**
    * noDictionaryColMaping mapping of dictionary dimensions and no dictionary dimensions.
    */
-  private boolean[] noDictionaryColMaping;
+  private boolean[] noDictionarySortColumnMaping;
 
   /**
-   * @param noDictionaryColMaping
+   * @param noDictionarySortColumnMaping
    * @param noDictionaryCount
    */
-  public RowComparator(boolean[] noDictionaryColMaping, int noDictionaryCount) {
+  public RowComparator(boolean[] noDictionarySortColumnMaping, int noDictionaryCount) {
     this.noDictionaryCount = noDictionaryCount;
-    this.noDictionaryColMaping = noDictionaryColMaping;
+    this.noDictionarySortColumnMaping = noDictionarySortColumnMaping;
   }
 
   /**
@@ -53,10 +53,10 @@ public class RowComparator implements Comparator<Object[]> {
     int normalIndex = 0;
     int noDictionaryindex = 0;
 
-    for (boolean isNoDictionary : noDictionaryColMaping) {
+    for (boolean isNoDictionary : noDictionarySortColumnMaping) {
 
       if (isNoDictionary) {
-        byte[] byteArr1 = (byte[]) rowA[IgnoreDictionary.BYTE_ARRAY_INDEX_IN_ROW.getIndex()];
+        byte[] byteArr1 = (byte[]) rowA[WriteStepRowUtil.NO_DICTIONARY_AND_COMPLEX];
 
         ByteBuffer buff1 = ByteBuffer.wrap(byteArr1);
 
@@ -64,7 +64,7 @@ public class RowComparator implements Comparator<Object[]> {
         NonDictionaryUtil
             .extractSingleHighCardDims(byteArr1, noDictionaryindex, noDictionaryCount, buff1);
 
-        byte[] byteArr2 = (byte[]) rowB[IgnoreDictionary.BYTE_ARRAY_INDEX_IN_ROW.getIndex()];
+        byte[] byteArr2 = (byte[]) rowB[WriteStepRowUtil.NO_DICTIONARY_AND_COMPLEX];
 
         ByteBuffer buff2 = ByteBuffer.wrap(byteArr2);
 

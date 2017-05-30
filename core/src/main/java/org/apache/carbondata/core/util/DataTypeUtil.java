@@ -99,11 +99,9 @@ public final class DataTypeUtil {
             new BigDecimal(msrValue).setScale(carbonMeasure.getScale(), RoundingMode.HALF_UP);
         return normalizeDecimalValue(bigDecimal, carbonMeasure.getPrecision());
       case SHORT:
-        Short shortValue = Short.parseShort(msrValue);
-        return shortValue.longValue();
+        return Short.parseShort(msrValue);
       case INT:
-        Integer intValue = Integer.parseInt(msrValue);
-        return intValue.longValue();
+        return Integer.parseInt(msrValue);
       case LONG:
         return Long.valueOf(msrValue);
       default:
@@ -152,7 +150,7 @@ public final class DataTypeUtil {
       case LONG:
         return CarbonCommonConstants.BIG_INT_MEASURE;
       default:
-        return CarbonCommonConstants.SUM_COUNT_VALUE_MEASURE;
+        return CarbonCommonConstants.DOUBLE_MEASURE;
     }
   }
 
@@ -319,6 +317,76 @@ public final class DataTypeUtil {
     }
 
   }
+
+  public static byte[] getBytesBasedOnDataTypeForNoDictionaryColumn(String dimensionValue,
+      DataType actualDataType) {
+    switch (actualDataType) {
+      case STRING:
+        return ByteUtil.toBytes(dimensionValue);
+      case BOOLEAN:
+        return ByteUtil.toBytes(Boolean.parseBoolean(dimensionValue));
+      case SHORT:
+        return ByteUtil.toBytes(Short.parseShort(dimensionValue));
+      case INT:
+        return ByteUtil.toBytes(Integer.parseInt(dimensionValue));
+      case FLOAT:
+        return ByteUtil.toBytes(Float.parseFloat(dimensionValue));
+      case LONG:
+        return ByteUtil.toBytes(Long.parseLong(dimensionValue));
+      case DOUBLE:
+        return ByteUtil.toBytes(Double.parseDouble(dimensionValue));
+      case DECIMAL:
+        return ByteUtil.toBytes(new BigDecimal(dimensionValue));
+      default:
+        return ByteUtil.toBytes(dimensionValue);
+    }
+  }
+
+
+  /**
+   * Below method will be used to convert the data passed to its actual data
+   * type
+   *
+   * @param dataInBytes    data
+   * @param actualDataType actual data type
+   * @return actual data after conversion
+   */
+  public static Object getDataBasedOnDataTypeForNoDictionaryColumn(byte[] dataInBytes,
+      DataType actualDataType) {
+    if (null == dataInBytes || Arrays
+        .equals(CarbonCommonConstants.MEMBER_DEFAULT_VAL_ARRAY, dataInBytes)) {
+      return null;
+    }
+    try {
+      switch (actualDataType) {
+        case STRING:
+          return UTF8String.fromBytes(dataInBytes);
+        case BOOLEAN:
+          return ByteUtil.toBoolean(dataInBytes);
+        case SHORT:
+          return ByteUtil.toShort(dataInBytes, 0, dataInBytes.length);
+        case INT:
+          return ByteUtil.toInt(dataInBytes, 0, dataInBytes.length);
+        case FLOAT:
+          return ByteUtil.toFloat(dataInBytes, 0);
+        case LONG:
+          return ByteUtil.toLong(dataInBytes, 0, dataInBytes.length);
+        case DOUBLE:
+          return ByteUtil.toDouble(dataInBytes, 0);
+        case DECIMAL:
+          return ByteUtil.toBigDecimal(dataInBytes, 0, dataInBytes.length);
+        default:
+          return ByteUtil.toString(dataInBytes, 0, dataInBytes.length);
+      }
+    } catch (Throwable ex) {
+      String data = new String(dataInBytes, CarbonCommonConstants.DEFAULT_CHARSET_CLASS);
+      LOGGER.error("Cannot convert" + data + " to " + actualDataType.getName() + " type value" + ex
+          .getMessage());
+      LOGGER.error("Problem while converting data type" + data);
+      return null;
+    }
+  }
+
 
   /**
    * Below method will be used to convert the data passed to its actual data
@@ -570,10 +638,10 @@ public final class DataTypeUtil {
    * Below method will be used to convert the data into byte[]
    *
    * @param data
-   * @param actualDataType actual data type
+   * @param columnSchema
    * @return actual data in byte[]
    */
-  public static byte[] convertDataToBytesBasedOnDataType(String data, DataType actualDataType) {
+  public static byte[] convertDataToBytesBasedOnDataType(String data, ColumnSchema columnSchema) {
     if (null == data) {
       return null;
     } else if (CarbonCommonConstants.MEMBER_DEFAULT_VAL.equals(data)) {
@@ -582,7 +650,7 @@ public final class DataTypeUtil {
     }
     try {
       long parsedIntVal = 0;
-      switch (actualDataType) {
+      switch (columnSchema.getDataType()) {
         case INT:
           parsedIntVal = (long) Integer.parseInt(data);
           return String.valueOf(parsedIntVal)
@@ -599,13 +667,17 @@ public final class DataTypeUtil {
               .getBytes(Charset.forName(CarbonCommonConstants.DEFAULT_CHARSET));
         case DATE:
         case TIMESTAMP:
-          DirectDictionaryGenerator directDictionaryGenerator =
-              DirectDictionaryKeyGeneratorFactory.getDirectDictionaryGenerator(actualDataType);
+          DirectDictionaryGenerator directDictionaryGenerator = DirectDictionaryKeyGeneratorFactory
+              .getDirectDictionaryGenerator(columnSchema.getDataType());
           int value = directDictionaryGenerator.generateDirectSurrogateKey(data);
           return String.valueOf(value)
               .getBytes(Charset.forName(CarbonCommonConstants.DEFAULT_CHARSET));
         case DECIMAL:
-          java.math.BigDecimal javaDecVal = new java.math.BigDecimal(data);
+          String parsedValue = parseStringToBigDecimal(data, columnSchema);
+          if (null == parsedValue) {
+            return null;
+          }
+          java.math.BigDecimal javaDecVal = new java.math.BigDecimal(parsedValue);
           return bigDecimalToByte(javaDecVal);
         default:
           return UTF8String.fromString(data).getBytes();

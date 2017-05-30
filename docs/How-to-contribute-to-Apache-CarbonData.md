@@ -32,8 +32,8 @@ We use a review-then-commit workflow in CarbonData for all contributions.
 
 ### Mailing list(s)
 
-We discuss design and implementation issues on dev@carbondata.incubator.apache.org Join by
-emailing dev-subscribe@carbondata.incubator.apache.org
+We discuss design and implementation issues on dev@carbondata.apache.org Join by
+emailing dev-subscribe@carbondata.apache.org
 
 ### Apache JIRA
 
@@ -46,7 +46,7 @@ If you do not already have an Apache JIRA account, sign up [here](https://issues
 
 If a quick search doesn’t turn up an existing JIRA issue for the work you want to contribute,
 create it. Please discuss your proposal with a committer or the component lead in JIRA or,
-alternatively, on the developer mailing list(dev@carbondata.incubator.apache.org).
+alternatively, on the developer mailing list(dev@carbondata.apache.org).
 
 If there’s an existing JIRA issue for your intended contribution, please comment about your
 intended work. Once the work is understood, a committer will assign the issue to you.
@@ -81,7 +81,7 @@ $ git config --global user.name "Your Name"
 
 #### Fork the repository on GitHub
 
-Go to the [Apache CarbonData GitHub mirror](https://github.com/apache/incubator-carbondata) and
+Go to the [Apache CarbonData GitHub mirror](https://github.com/apache/carbondata) and
 fork the repository to your own private account.
 This will be your private workspace for staging changes.
 
@@ -90,12 +90,12 @@ This will be your private workspace for staging changes.
 You are now ready to create the development environment on your local machine.
 Clone CarbonData’s read-only GitHub mirror.
 ```
-$ git clone https://github.com/apache/incubator-carbondata.git
-$ cd incubator-carbondata
+$ git clone https://github.com/apache/carbondata.git
+$ cd carbondata
 ```
 Add your forked repository as an additional Git remote, where you’ll push your changes.
 ```
-$ git remote add <GitHub_user> https://github.com/<GitHub_user>/incubator-carbondata.git
+$ git remote add <GitHub_user> https://github.com/<GitHub_user>/carbondata.git
 ```
 You are now ready to start developing!
 

@@ -107,7 +107,7 @@ You can use the following options to load data:
 - **COMPLEX_DELIMITER_LEVEL_2:** Split the complex type nested data column in a row. Applies level_1 delimiter & applies level_2 based on complex data type (eg., a:b$c:d --> Array> = {{a,b},{c,d}}).
 
     ```
-    OPTIONS('COMPLEX_DELIMITER_LEVEL_2'=':') 
+    OPTIONS('COMPLEX_DELIMITER_LEVEL_2'=':')
     ```
 
 - **ALL_DICTIONARY_PATH:** All dictionary files path.
@@ -133,14 +133,6 @@ You can use the following options to load data:
 
     NOTE: Date formats are specified by date pattern strings. The date pattern letters in CarbonData are same as in JAVA. Refer to [SimpleDateFormat](http://docs.oracle.com/javase/7/docs/api/java/text/SimpleDateFormat.html).
 
-- **USE_KETTLE:** This option is used to specify whether to use kettle for loading data or not. By default kettle is not used for data loading.
-
-    ```
-    OPTIONS('USE_KETTLE'='FALSE')
-    ```
-
-   Note :  It is recommended to set the value for this option as false.
-
 - **SINGLE_PASS:** Single Pass Loading enables single job to finish data loading with dictionary generation on the fly. It enhances performance in the scenarios where the subsequent data loading after initial load involves fewer incremental updates on the dictionary.
 
    This option specifies whether to use single pass for loading data or not. By default this option is set to FALSE.
@@ -165,7 +157,6 @@ options('DELIMITER'=',', 'QUOTECHAR'='"','COMMENTCHAR'='#',
 'MULTILINE'='true','ESCAPECHAR'='\','COMPLEX_DELIMITER_LEVEL_1'='$',
 'COMPLEX_DELIMITER_LEVEL_2'=':',
 'ALL_DICTIONARY_PATH'='/opt/alldictionary/data.dictionary',
-'USE_KETTLE'='FALSE',
 'SINGLE_PASS'='TRUE'
 )
 ```
@@ -299,8 +290,8 @@ This command will allow to delete the CarbonData segment(s) from the store based
 The segment created before the particular date will be removed from the specific stores.
 
 ```
-DELETE FROM TABLE [schema_name.]table_name 
-WHERE[DATE_FIELD]BEFORE [DATE_VALUE]
+DELETE SEGMENTS FROM TABLE [db_name.]table_name 
+WHERE STARTTIME BEFORE DATE_VALUE
 ```
 
 ### Parameter Description
@@ -348,6 +339,8 @@ SET (column_name1, column_name2,) =
 | column_name | The destination columns to be updated. |
 | sourceColumn | The source table column values to be updated in destination table. |
 | sourceTable | The table from which the records are updated into destination Carbon table. |
+
+NOTE: This functionality is currently not supported in Spark 2.x and will support soon.  
 
 ### Usage Guidelines
 The following conditions must be met for successful updation :
@@ -422,6 +415,7 @@ DELETE FROM table_name [WHERE expression];
 |--------------|-----------------------------------------------------------------------|
 | table_name | The name of the Carbon table in which you want to perform the delete. |
 
+NOTE: This functionality is currently not supported in Spark 2.x and will support soon.  
 
 ### Examples
 

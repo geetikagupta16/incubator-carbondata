@@ -20,7 +20,6 @@ package org.apache.carbondata.processing.util;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -38,13 +37,13 @@ import org.apache.carbondata.core.datastore.filesystem.CarbonFileFilter;
 import org.apache.carbondata.core.datastore.impl.FileFactory;
 import org.apache.carbondata.core.datastore.impl.FileFactory.FileType;
 import org.apache.carbondata.core.metadata.CarbonMetadata;
+import org.apache.carbondata.core.metadata.CarbonTableIdentifier;
 import org.apache.carbondata.core.metadata.datatype.DataType;
 import org.apache.carbondata.core.metadata.schema.table.CarbonTable;
 import org.apache.carbondata.core.metadata.schema.table.column.CarbonDimension;
 import org.apache.carbondata.core.metadata.schema.table.column.CarbonMeasure;
 import org.apache.carbondata.core.util.CarbonProperties;
 import org.apache.carbondata.core.util.CarbonUtil;
-import org.apache.carbondata.core.util.DataTypeUtil;
 import org.apache.carbondata.core.util.path.CarbonStorePath;
 import org.apache.carbondata.core.util.path.CarbonTablePath;
 import org.apache.carbondata.processing.datatypes.ArrayDataType;
@@ -52,7 +51,9 @@ import org.apache.carbondata.processing.datatypes.GenericDataType;
 import org.apache.carbondata.processing.datatypes.PrimitiveDataType;
 import org.apache.carbondata.processing.datatypes.StructDataType;
 import org.apache.carbondata.processing.model.CarbonDataLoadSchema;
+import org.apache.carbondata.processing.newflow.CarbonDataLoadConfiguration;
 import org.apache.carbondata.processing.newflow.DataField;
+import org.apache.carbondata.processing.newflow.sort.SortScopeOptions;
 
 import org.apache.commons.lang3.ArrayUtils;
 
@@ -85,32 +86,6 @@ public final class CarbonDataProcessorUtil {
       fileBufferSize = CarbonCommonConstants.BYTE_TO_KB_CONVERSION_FACTOR;
     }
     return fileBufferSize;
-  }
-
-  /**
-   * Utility method to get level cardinality string
-   *
-   * @param dimCardinalities
-   * @param aggDims
-   * @return level cardinality string
-   */
-  public static String getLevelCardinalitiesString(Map<String, String> dimCardinalities,
-      String[] aggDims) {
-    StringBuilder sb = new StringBuilder();
-
-    for (int i = 0; i < aggDims.length; i++) {
-      String string = dimCardinalities.get(aggDims[i]);
-      if (string != null) {
-        sb.append(string);
-        sb.append(CarbonCommonConstants.COMA_SPC_CHARACTER);
-      }
-    }
-    String resultStr = sb.toString();
-    if (resultStr.endsWith(CarbonCommonConstants.COMA_SPC_CHARACTER)) {
-      resultStr = resultStr
-          .substring(0, resultStr.length() - CarbonCommonConstants.COMA_SPC_CHARACTER.length());
-    }
-    return resultStr;
   }
 
   /**
@@ -188,12 +163,8 @@ public final class CarbonDataProcessorUtil {
    */
   public static String getLocalDataFolderLocation(String databaseName, String tableName,
       String taskId, String partitionId, String segmentId, boolean isCompactionFlow) {
-    String tempLocationKey = databaseName + CarbonCommonConstants.UNDERSCORE + tableName
-        + CarbonCommonConstants.UNDERSCORE + taskId;
-    if (isCompactionFlow) {
-      tempLocationKey = CarbonCommonConstants.COMPACTION_KEY_WORD + '_' + tempLocationKey;
-    }
-
+    String tempLocationKey =
+        getTempStoreLocationKey(databaseName, tableName, taskId, isCompactionFlow);
     String baseStorePath = CarbonProperties.getInstance()
         .getProperty(tempLocationKey, CarbonCommonConstants.STORE_LOCATION_DEFAULT_VAL);
     CarbonTable carbonTable = CarbonMetadata.getInstance()
@@ -202,8 +173,27 @@ public final class CarbonDataProcessorUtil {
         CarbonStorePath.getCarbonTablePath(baseStorePath, carbonTable.getCarbonTableIdentifier());
     String carbonDataDirectoryPath =
         carbonTablePath.getCarbonDataDirectoryPath(partitionId, segmentId + "");
-    String localDataLoadFolderLocation = carbonDataDirectoryPath + File.separator + taskId;
-    return localDataLoadFolderLocation;
+    return carbonDataDirectoryPath + File.separator + taskId;
+  }
+
+  /**
+   * This method will form the key for getting the temporary location set in carbon properties
+   *
+   * @param databaseName
+   * @param tableName
+   * @param taskId
+   * @param isCompactionFlow
+   * @return
+   */
+  public static String getTempStoreLocationKey(String databaseName, String tableName, String taskId,
+      boolean isCompactionFlow) {
+    String tempLocationKey = databaseName + CarbonCommonConstants.UNDERSCORE + tableName
+        + CarbonCommonConstants.UNDERSCORE + taskId;
+    if (isCompactionFlow) {
+      tempLocationKey = CarbonCommonConstants.COMPACTION_KEY_WORD + CarbonCommonConstants.UNDERSCORE
+          + tempLocationKey;
+    }
+    return tempLocationKey;
   }
 
   /**
@@ -217,9 +207,9 @@ public final class CarbonDataProcessorUtil {
         break;
       }
 
-      if (!field.hasDictionaryEncoding() && field.getColumn().isDimesion()) {
+      if (!field.hasDictionaryEncoding() && field.getColumn().isDimension()) {
         noDictionaryMapping.add(true);
-      } else if (field.getColumn().isDimesion()) {
+      } else if (field.getColumn().isDimension()) {
         noDictionaryMapping.add(false);
       }
     }
@@ -233,9 +223,9 @@ public final class CarbonDataProcessorUtil {
   public static boolean[] getIsUseInvertedIndex(DataField[] fields) {
     List<Boolean> isUseInvertedIndexList = new ArrayList<Boolean>();
     for (DataField field : fields) {
-      if (field.getColumn().isUseInvertedIndex() && field.getColumn().isDimesion()) {
+      if (field.getColumn().isUseInvertedIndex() && field.getColumn().isDimension()) {
         isUseInvertedIndexList.add(true);
-      } else if (field.getColumn().isDimesion()) {
+      } else if (field.getColumn().isDimension()) {
         isUseInvertedIndexList.add(false);
       }
     }
@@ -329,13 +319,6 @@ public final class CarbonDataProcessorUtil {
     return true;
   }
 
-  public static boolean isHeaderValid(String tableName, String header,
-      CarbonDataLoadSchema schema, String delimiter) {
-    String convertedDelimiter = CarbonUtil.delimiterConverter(delimiter);
-    String[] csvHeader = getColumnFields(header.toLowerCase(), convertedDelimiter);
-    return isHeaderValid(tableName, csvHeader, schema);
-  }
-
   /**
    * This method update the column Name
    *
@@ -368,49 +351,27 @@ public final class CarbonDataProcessorUtil {
     return columnNames;
   }
 
-  /**
-   * Splits header to fields using delimiter.
-   * @param header
-   * @param delimiter
-   * @return
-   */
-  public static String[] getColumnFields(String header, String delimiter) {
-    delimiter = CarbonUtil.delimiterConverter(delimiter);
-    String[] columnNames = header.split(delimiter);
-    String tmpCol;
-    for (int i = 0; i < columnNames.length; i++) {
-      tmpCol = columnNames[i].replaceAll("\"", "");
-      columnNames[i] = tmpCol.trim();
+  public static DataType[] getMeasureDataType(int measureCount, String databaseName,
+      String tableName) {
+    DataType[] type = new DataType[measureCount];
+    for (int i = 0; i < type.length; i++) {
+      type[i] = DataType.DOUBLE;
     }
-
-    return columnNames;
-  }
-
-  /**
-   * get agg type
-   */
-  public static char[] getAggType(int measureCount, String databaseName, String tableName) {
-    char[] aggType = new char[measureCount];
-    Arrays.fill(aggType, 'n');
     CarbonTable carbonTable = CarbonMetadata.getInstance().getCarbonTable(
         databaseName + CarbonCommonConstants.UNDERSCORE + tableName);
     List<CarbonMeasure> measures = carbonTable.getMeasureByTableName(tableName);
-    for (int i = 0; i < aggType.length; i++) {
-      aggType[i] = DataTypeUtil.getAggType(measures.get(i).getDataType());
+    for (int i = 0; i < type.length; i++) {
+      type[i] = measures.get(i).getDataType();
     }
-    return aggType;
+    return type;
   }
 
-  /**
-   * get agg type
-   */
-  public static char[] getAggType(int measureCount, DataField[] measureFields) {
-    char[] aggType = new char[measureCount];
-    Arrays.fill(aggType, 'n');
-    for (int i = 0; i < measureFields.length; i++) {
-      aggType[i] = DataTypeUtil.getAggType(measureFields[i].getColumn().getDataType());
+  public static DataType[] getMeasureDataType(int measureCount, DataField[] measureFields) {
+    DataType[] type = new DataType[measureCount];
+    for (int i = 0; i < type.length; i++) {
+      type[i] = measureFields[i].getColumn().getDataType();
     }
-    return aggType;
+    return type;
   }
 
   /**
@@ -429,6 +390,89 @@ public final class CarbonDataProcessorUtil {
       }
     }
     return dateformatsHashMap;
+  }
+
+  /**
+   * This method will get the store location for the given path, segment id and partition id
+   *
+   * @return data directory path
+   */
+  public static String checkAndCreateCarbonStoreLocation(String factStoreLocation,
+      String databaseName, String tableName, String partitionId, String segmentId) {
+    CarbonTable carbonTable = CarbonMetadata.getInstance()
+        .getCarbonTable(databaseName + CarbonCommonConstants.UNDERSCORE + tableName);
+    CarbonTableIdentifier carbonTableIdentifier = carbonTable.getCarbonTableIdentifier();
+    CarbonTablePath carbonTablePath =
+        CarbonStorePath.getCarbonTablePath(factStoreLocation, carbonTableIdentifier);
+    String carbonDataDirectoryPath =
+        carbonTablePath.getCarbonDataDirectoryPath(partitionId, segmentId);
+    CarbonUtil.checkAndCreateFolder(carbonDataDirectoryPath);
+    return carbonDataDirectoryPath;
+  }
+
+  /**
+   * initialise data type for measures for their storage format
+   */
+  public static DataType[] initDataType(CarbonTable carbonTable, String tableName,
+      int measureCount) {
+    DataType[] type = new DataType[measureCount];
+    for (int i = 0; i < type.length; i++) {
+      type[i] = DataType.DOUBLE;
+    }
+    List<CarbonMeasure> measures = carbonTable.getMeasureByTableName(tableName);
+    for (int i = 0; i < measureCount; i++) {
+      type[i] = measures.get(i).getDataType();
+    }
+    return type;
+  }
+
+  /**
+   * Check whether batch sort is enabled or not.
+   * @param configuration
+   * @return
+   */
+  public static SortScopeOptions.SortScope getSortScope(CarbonDataLoadConfiguration configuration) {
+    SortScopeOptions.SortScope sortScope;
+    try {
+      // first check whether user input it from ddl, otherwise get from carbon properties
+      if (configuration.getDataLoadProperty(CarbonCommonConstants.LOAD_SORT_SCOPE) == null) {
+        sortScope = SortScopeOptions.getSortScope(CarbonProperties.getInstance()
+            .getProperty(CarbonCommonConstants.LOAD_SORT_SCOPE,
+                CarbonCommonConstants.LOAD_SORT_SCOPE_DEFAULT));
+      } else {
+        sortScope = SortScopeOptions.getSortScope(
+            configuration.getDataLoadProperty(CarbonCommonConstants.LOAD_SORT_SCOPE)
+                .toString());
+      }
+    } catch (Exception e) {
+      sortScope = SortScopeOptions.getSortScope(CarbonCommonConstants.LOAD_SORT_SCOPE_DEFAULT);
+      LOGGER.warn("sort scope is set to " + sortScope);
+    }
+    return sortScope;
+  }
+
+  /**
+   * Get the batch sort size
+   * @param configuration
+   * @return
+   */
+  public static int getBatchSortSizeinMb(CarbonDataLoadConfiguration configuration) {
+    int batchSortSizeInMb;
+    try {
+      // First try get from user input from ddl , otherwise get from carbon properties.
+      if (configuration.getDataLoadProperty(CarbonCommonConstants.LOAD_BATCH_SORT_SIZE_INMB)
+          == null) {
+        batchSortSizeInMb = Integer.parseInt(CarbonProperties.getInstance()
+            .getProperty(CarbonCommonConstants.LOAD_BATCH_SORT_SIZE_INMB, "0"));
+      } else {
+        batchSortSizeInMb = Integer.parseInt(
+            configuration.getDataLoadProperty(CarbonCommonConstants.LOAD_BATCH_SORT_SIZE_INMB)
+                .toString());
+      }
+    } catch (Exception e) {
+      batchSortSizeInMb = 0;
+    }
+    return batchSortSizeInMb;
   }
 
 }

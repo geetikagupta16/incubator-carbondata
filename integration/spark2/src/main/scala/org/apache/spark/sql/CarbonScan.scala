@@ -46,17 +46,9 @@ case class CarbonScan(
 
   def processFilterExpressions(plan: CarbonQueryPlan) {
     if (dimensionPredicatesRaw.nonEmpty) {
-      val expressionVal = CarbonFilters.processExpression(
-        dimensionPredicatesRaw,
-        attributesNeedToDecode,
-        unprocessedExprs,
-        carbonTable)
-      expressionVal match {
-        case Some(ce) =>
-          // adding dimension used in expression in querystats
-          plan.setFilterExpression(ce)
-        case _ =>
-      }
+      val exps = CarbonFilters.preProcessExpressions(dimensionPredicatesRaw)
+      val expressionVal = CarbonFilters.transformExpression(exps.head)
+      plan.setFilterExpression(expressionVal)
     }
     processExtraAttributes(plan)
   }
@@ -88,7 +80,7 @@ case class CarbonScan(
     attributesRaw.foreach { attr =>
       val carbonColumn = carbonTable.getColumnByName(carbonTable.getFactTableName, attr.name)
       if (carbonColumn != null) {
-        if (carbonColumn.isDimesion()) {
+        if (carbonColumn.isDimension()) {
           val dim = new QueryDimension(attr.name)
           dim.setQueryOrder(queryOrder)
           queryOrder = queryOrder + 1

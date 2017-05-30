@@ -1,3 +1,20 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package org.apache.spark.carbondata.restructure
 
 import java.io.File
@@ -13,7 +30,6 @@ import org.apache.carbondata.core.util.CarbonProperties
 class AlterTableValidationTestCase extends QueryTest with BeforeAndAfterAll {
 
   override def beforeAll {
-
     CarbonProperties.getInstance()
       .addProperty(CarbonCommonConstants.CARBON_BADRECORDS_LOC,
         new File("./target/test/badRecords").getCanonicalPath)
@@ -50,7 +66,7 @@ class AlterTableValidationTestCase extends QueryTest with BeforeAndAfterAll {
     s"""LOAD DATA LOCAL INPATH '$resourcesPath/badrecords/datasample.csv' INTO TABLE
          |restructure_bad OPTIONS
          |('DELIMITER'= ',', 'QUOTECHAR'= '\"', 'bad_records_logger_enable'='true',
-         |'bad_records_action'='redirect')"""
+         |'bad_records_action'='force')"""
       .stripMargin)
 
   }
@@ -102,6 +118,14 @@ class AlterTableValidationTestCase extends QueryTest with BeforeAndAfterAll {
     checkExistence(sql("desc restructure"), true, "longfldbigint")
     checkExistence(sql("desc restructure"), true, "dblflddouble")
     checkExistence(sql("desc restructure"), true, "dcmldecimal(5,4)")
+  }
+
+  test(
+    "test add decimal without scale and precision, default precision and scale (10,0) should be " +
+    "used")
+  {
+    sql("alter table restructure add columns(dcmldefault decimal)")
+    checkExistence(sql("desc restructure"), true, "dcmldefaultdecimal(10,0)")
   }
 
   test("test adding existing measure as dimension") {
@@ -268,6 +292,17 @@ class AlterTableValidationTestCase extends QueryTest with BeforeAndAfterAll {
     sql("alter table default.restructure change intfield intField bigint")
     checkExistence(sql("desc restructure"), true, "intfieldbigint")
     sql("alter table default.restructure change decimalfield deciMalfield Decimal(11,3)")
+    sql("alter table default.restructure change decimalfield deciMalfield Decimal(12,3)")
+    intercept[RuntimeException] {
+      sql("alter table default.restructure change decimalfield deciMalfield Decimal(12,3)")
+    }
+    intercept[RuntimeException] {
+      sql("alter table default.restructure change decimalfield deciMalfield Decimal(13,1)")
+    }
+    intercept[RuntimeException] {
+      sql("alter table default.restructure change decimalfield deciMalfield Decimal(13,5)")
+    }
+    sql("alter table default.restructure change decimalfield deciMalfield Decimal(13,4)")
   }
 
   test("test change datatype of string to int column") {
@@ -373,11 +408,29 @@ class AlterTableValidationTestCase extends QueryTest with BeforeAndAfterAll {
     sql("drop database testdb")
   }
 
+  test("test to check if the lock file is successfully deleted") {
+      sql("create table lock_check(id int, name string) stored by 'carbondata'")
+    sql("alter table lock_check rename to lock_rename")
+    assert(!new File(s"${ CarbonCommonConstants.STORE_LOCATION } + /default/lock_rename/meta.lock")
+      .exists())
+  }
+
+  test("table rename with dbname in Camel Case") {
+    sql("drop table if exists uniqdata")
+    sql("drop table if exists uniqdata1")
+    sql("""CREATE TABLE uniqdata (CUST_ID int,CUST_NAME String) STORED BY 'org.apache.carbondata.format'""")
+    sql("""insert into table uniqdata values(1,"hello")""")
+    sql("alter table Default.uniqdata rename to uniqdata1")
+    checkAnswer(sql("select * from Default.uniqdata1"), Row(1,"hello"))
+  }
+
   override def afterAll {
     sql("DROP TABLE IF EXISTS restructure")
     sql("DROP TABLE IF EXISTS restructure_new")
     sql("DROP TABLE IF EXISTS restructure_test")
     sql("DROP TABLE IF EXISTS restructure_bad")
     sql("DROP TABLE IF EXISTS restructure_badnew")
+    sql("DROP TABLE IF EXISTS lock_rename")
+    sql("drop table if exists uniqdata")
   }
 }

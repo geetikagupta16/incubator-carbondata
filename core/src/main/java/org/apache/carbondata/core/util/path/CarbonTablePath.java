@@ -23,6 +23,7 @@ import org.apache.carbondata.core.datastore.filesystem.CarbonFile;
 import org.apache.carbondata.core.datastore.filesystem.CarbonFileFilter;
 import org.apache.carbondata.core.datastore.impl.FileFactory;
 import org.apache.carbondata.core.metadata.CarbonTableIdentifier;
+import org.apache.carbondata.core.metadata.ColumnarFormatVersion;
 
 import org.apache.hadoop.fs.Path;
 
@@ -274,6 +275,38 @@ public class CarbonTablePath extends Path {
           + "]");
     }
   }
+
+  /**
+   * Below method will be used to get the carbon index file path
+   * @param taskId
+   *        task id
+   * @param partitionId
+   *        partition id
+   * @param segmentId
+   *        segment id
+   * @param bucketNumber
+   *        bucket number
+   * @param timeStamp
+   *        timestamp
+   * @return carbon index file path
+   */
+  public String getCarbonIndexFilePath(String taskId, String partitionId, String segmentId,
+      String bucketNumber, String timeStamp, ColumnarFormatVersion columnarFormatVersion) {
+    switch (columnarFormatVersion) {
+      case V1:
+      case V2:
+        return getCarbonIndexFilePath(taskId, partitionId, segmentId, bucketNumber);
+      default:
+        String segmentDir = getSegmentDir(partitionId, segmentId);
+        return segmentDir + File.separator + getCarbonIndexFileName(taskId,
+            Integer.parseInt(bucketNumber), timeStamp);
+    }
+  }
+
+  private static String getCarbonIndexFileName(String taskNo, int bucketNumber,
+      String factUpdatedtimeStamp) {
+    return taskNo + "-" + bucketNumber + "-" + factUpdatedtimeStamp + INDEX_FILE_EXT;
+  }
   /**
    * Below method will be used to get the index file present in the segment folder
    * based on task id
@@ -492,6 +525,15 @@ public class CarbonTablePath extends Path {
     }
 
     /**
+     * get the taskId part from taskNo(include taskId + batchNo)
+     * @param taskNo
+     * @return
+     */
+    public static int getTaskIdFromTaskNo(String taskNo) {
+      return Integer.parseInt(taskNo.split(BATCH_PREFIX)[0]);
+    }
+
+    /**
      * Gets the file name from file path
      */
     private static String getFileName(String carbonDataFileName) {
@@ -557,12 +599,11 @@ public class CarbonTablePath extends Path {
    * @return sort index carbon files
    */
   public CarbonFile[] getSortIndexFiles(CarbonFile sortIndexDir, final String columnUniqueId) {
-    CarbonFile[] files = sortIndexDir.listFiles(new CarbonFileFilter() {
+    return sortIndexDir.listFiles(new CarbonFileFilter() {
       @Override public boolean accept(CarbonFile file) {
         return file.getName().startsWith(columnUniqueId) && file.getName().endsWith(SORT_INDEX_EXT);
       }
     });
-    return files;
   }
 
   /**
@@ -572,10 +613,9 @@ public class CarbonTablePath extends Path {
    * @return
    */
   public static String getCarbonDataFileName(String carbonDataFilePath) {
-    String carbonDataFileName = carbonDataFilePath
+    return carbonDataFilePath
         .substring(carbonDataFilePath.lastIndexOf(CarbonCommonConstants.FILE_SEPARATOR) + 1,
             carbonDataFilePath.indexOf(CARBON_DATA_EXT));
-    return carbonDataFileName;
   }
 
   /**

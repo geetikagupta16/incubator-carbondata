@@ -49,12 +49,18 @@ public class DictionaryBasedVectorResultCollector extends AbstractScannedResultC
 
   protected ColumnVectorInfo[] allColumnInfo;
 
+  protected ColumnVectorInfo[] implictColumnInfo;
+
   public DictionaryBasedVectorResultCollector(BlockExecutionInfo blockExecutionInfos) {
     super(blockExecutionInfos);
-    queryDimensions = tableBlockExecutionInfos.getQueryDimensions();
-    queryMeasures = tableBlockExecutionInfos.getQueryMeasures();
-    allColumnInfo = new ColumnVectorInfo[queryDimensions.length + queryMeasures.length];
-    prepareDimensionAndMeasureColumnVectors();
+    // initialize only if the current block is not a restructured block else the initialization
+    // will be taken care by RestructureBasedVectorResultCollector
+    if (!blockExecutionInfos.isRestructuredBlock()) {
+      queryDimensions = tableBlockExecutionInfos.getQueryDimensions();
+      queryMeasures = tableBlockExecutionInfos.getQueryMeasures();
+      allColumnInfo = new ColumnVectorInfo[queryDimensions.length + queryMeasures.length];
+      prepareDimensionAndMeasureColumnVectors();
+    }
   }
 
   protected void prepareDimensionAndMeasureColumnVectors() {
@@ -62,8 +68,15 @@ public class DictionaryBasedVectorResultCollector extends AbstractScannedResultC
     List<ColumnVectorInfo> dictInfoList = new ArrayList<>();
     List<ColumnVectorInfo> noDictInfoList = new ArrayList<>();
     List<ColumnVectorInfo> complexList = new ArrayList<>();
+    List<ColumnVectorInfo> implictColumnList = new ArrayList<>();
     for (int i = 0; i < queryDimensions.length; i++) {
-      if (!queryDimensions[i].getDimension().hasEncoding(Encoding.DICTIONARY)) {
+      if (queryDimensions[i].getDimension().hasEncoding(Encoding.IMPLICIT)) {
+        ColumnVectorInfo columnVectorInfo = new ColumnVectorInfo();
+        implictColumnList.add(columnVectorInfo);
+        columnVectorInfo.dimension = queryDimensions[i];
+        columnVectorInfo.ordinal = queryDimensions[i].getDimension().getOrdinal();
+        allColumnInfo[queryDimensions[i].getQueryOrder()] = columnVectorInfo;
+      } else if (!queryDimensions[i].getDimension().hasEncoding(Encoding.DICTIONARY)) {
         ColumnVectorInfo columnVectorInfo = new ColumnVectorInfo();
         noDictInfoList.add(columnVectorInfo);
         columnVectorInfo.dimension = queryDimensions[i];
@@ -105,8 +118,8 @@ public class DictionaryBasedVectorResultCollector extends AbstractScannedResultC
     dictionaryInfo = dictInfoList.toArray(new ColumnVectorInfo[dictInfoList.size()]);
     noDictionaryInfo = noDictInfoList.toArray(new ColumnVectorInfo[noDictInfoList.size()]);
     complexInfo = complexList.toArray(new ColumnVectorInfo[complexList.size()]);
+    implictColumnInfo = implictColumnList.toArray(new ColumnVectorInfo[implictColumnList.size()]);
     Arrays.sort(dictionaryInfo);
-    Arrays.sort(noDictionaryInfo);
     Arrays.sort(complexInfo);
   }
 
@@ -141,6 +154,7 @@ public class DictionaryBasedVectorResultCollector extends AbstractScannedResultC
     scannedResult.fillColumnarNoDictionaryBatch(noDictionaryInfo);
     scannedResult.fillColumnarMeasureBatch(measureColumnInfo, measureInfo.getMeasureOrdinals());
     scannedResult.fillColumnarComplexBatch(complexInfo);
+    scannedResult.fillColumnarImplicitBatch(implictColumnInfo);
     // it means fetched all data out of page so increment the page counter
     if (availableRows == requiredRows) {
       scannedResult.incrementPageCounter();

@@ -16,7 +16,6 @@
  */
 package org.apache.spark.sql.parser
 
-import scala.collection.JavaConverters._
 import scala.collection.mutable
 
 import org.apache.spark.sql.catalyst.parser.{AbstractSqlParser, ParseException, SqlBaseParser}
@@ -25,7 +24,8 @@ import org.apache.spark.sql.catalyst.parser.SqlBaseParser.{CreateTableContext,
 TablePropertyListContext}
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.execution.SparkSqlAstBuilder
-import org.apache.spark.sql.execution.command.{BucketFields, CreateTable, Field, TableModel}
+import org.apache.spark.sql.execution.command.{BucketFields, CreateTable, Field,
+PartitionerField, TableModel}
 import org.apache.spark.sql.internal.{SQLConf, VariableSubstitution}
 
 import org.apache.carbondata.spark.CarbonOption
@@ -48,7 +48,16 @@ class CarbonSparkSqlParser(conf: SQLConf) extends AbstractSqlParser {
       case ce: MalformedCarbonCommandException =>
         throw ce
       case ex =>
-        astBuilder.parser.parse(sqlText)
+        try {
+          astBuilder.parser.parse(sqlText)
+        } catch {
+          case mce: MalformedCarbonCommandException =>
+            throw mce
+          case e =>
+            sys
+              .error("\n" + "BaseSqlParser>>>> " + ex.getMessage + "\n" + "CarbonSqlParser>>>> " +
+                     e.getMessage)
+        }
     }
   }
 
@@ -87,7 +96,10 @@ class CarbonSqlAstBuilder(conf: SQLConf) extends SparkSqlAstBuilder(conf) {
       if (ctx.bucketSpec != null) {
         operationNotAllowed("CREATE TABLE ... CLUSTERED BY", ctx)
       }
-      val partitionCols = Option(ctx.partitionColumns).toSeq.flatMap(visitColTypeList)
+      val partitionByStructFields = Option(ctx.partitionColumns).toSeq.flatMap(visitColTypeList)
+      val partitionerFields = partitionByStructFields.map { structField =>
+        PartitionerField(structField.name, Some(structField.dataType.toString), null)
+      }
       val cols = Option(ctx.columns).toSeq.flatMap(visitColTypeList)
       val properties = Option(ctx.tablePropertyList).map(visitPropertyKeyValues)
         .getOrElse(Map.empty)
@@ -102,75 +114,32 @@ class CarbonSqlAstBuilder(conf: SQLConf) extends SparkSqlAstBuilder(conf) {
                             duplicateColumns.mkString("[", ",", "]"), ctx)
       }
 
-      // For Hive tables, partition columns must not be part of the schema
-      val badPartCols = partitionCols.map(_.name).toSet.intersect(colNames.toSet)
-      if (badPartCols.nonEmpty) {
-        operationNotAllowed(s"Partition columns may not be specified in the schema: " +
-                            badPartCols.map("\"" + _ + "\"").mkString("[", ",", "]"), ctx)
-      }
-
-      // Note: Hive requires partition columns to be distinct from the schema, so we need
-      // to include the partition columns here explicitly
-      val schema = cols ++ partitionCols
-
-      val fields = schema.map { col =>
-        val x = if (col.dataType.catalogString == "float") {
-          '`' + col.name + '`' + " double"
-        }
-        else {
-          '`' + col.name + '`' + ' ' + col.dataType.catalogString
-        }
-        val f: Field = parser.anyFieldDef(new parser.lexical.Scanner(x.toLowerCase))
-        match {
-          case parser.Success(field, _) => field.asInstanceOf[Field]
-          case failureOrError => throw new MalformedCarbonCommandException(
-            s"Unsupported data type: $col.getType")
-        }
-        // the data type of the decimal type will be like decimal(10,0)
-        // so checking the start of the string and taking the precision and scale.
-        // resetting the data type with decimal
-        if (f.dataType.getOrElse("").startsWith("decimal")) {
-          val (precision, scale) = parser.getScaleAndPrecision(col.dataType.catalogString)
-          f.precision = precision
-          f.scale = scale
-          f.dataType = Some("decimal")
-        }
-        if (f.dataType.getOrElse("").startsWith("char")) {
-          f.dataType = Some("char")
-        }
-        else if (f.dataType.getOrElse("").startsWith("float")) {
-          f.dataType = Some("double")
-        }
-        f.rawSchema = x
-        f
-      }
-
-      // validate tblProperties
-      if (!CommonUtil.validateTblProperties(properties.asJava.asScala, fields)) {
-        throw new MalformedCarbonCommandException("Invalid table properties")
-      }
-      val options = new CarbonOption(properties)
-      val bucketFields = if (options.isBucketingEnabled) {
-        if (options.bucketNumber.toString.contains("-") ||
-            options.bucketNumber.toString.contains("+")) {
-          throw new MalformedCarbonCommandException("INVALID NUMBER OF BUCKETS SPECIFIED")
-        }
-        else {
-          Some(BucketFields(options.bucketColumns.toLowerCase.split(",").map(_.trim),
-            options.bucketNumber))
-        }
-      } else {
-        None
-      }
-
       val tableProperties = mutable.Map[String, String]()
-      properties.foreach(f => tableProperties.put(f._1, f._2.toLowerCase))
+      properties.foreach{property => tableProperties.put(property._1, property._2.toLowerCase)}
+
+      // validate partition clause
+      if (partitionerFields.nonEmpty) {
+        if (!CommonUtil.validatePartitionColumns(tableProperties, partitionerFields)) {
+          throw new MalformedCarbonCommandException("Invalid partition definition")
+        }
+        // partition columns should not be part of the schema
+        val badPartCols = partitionerFields.map(_.partitionColumn).toSet.intersect(colNames.toSet)
+        if (badPartCols.nonEmpty) {
+          operationNotAllowed(s"Partition columns should not be specified in the schema: " +
+                              badPartCols.map("\"" + _ + "\"").mkString("[", ",", "]"), ctx)
+        }
+      }
+      val fields = parser.getFields(cols ++ partitionByStructFields)
+      val options = new CarbonOption(properties)
+      // validate tblProperties
+      val bucketFields = parser.getBucketFields(tableProperties, fields, options)
+
       // prepare table model of the collected tokens
       val tableModel: TableModel = parser.prepareTableModel(ifNotExists,
         convertDbNameToLowerCase(name.database),
         name.table.toLowerCase,
         fields,
-        Seq(),
+        partitionerFields,
         tableProperties,
         bucketFields)
 
@@ -207,5 +176,6 @@ class CarbonSqlAstBuilder(conf: SQLConf) extends SparkSqlAstBuilder(conf) {
       (key.toLowerCase, value.toLowerCase)
     }
   }
+
 
 }

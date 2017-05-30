@@ -17,6 +17,8 @@
 
 package org.apache.carbondata.core.datastore.impl;
 
+import java.io.BufferedInputStream;
+import java.io.DataInputStream;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -34,6 +36,7 @@ public class FileHolderImpl implements FileHolder {
    * cache to hold filename and its stream
    */
   private Map<String, FileChannel> fileNameAndStreamCache;
+  private String queryId;
 
   /**
    * FileHolderImpl Constructor
@@ -136,7 +139,7 @@ public class FileHolderImpl implements FileHolder {
   }
 
   /**
-   * This method will be used to read from file based on number of bytes to be read and positon
+   * This method will be used to read from file based on number of bytes to be read and position
    *
    * @param channel file channel
    * @param size    number of bytes
@@ -152,7 +155,7 @@ public class FileHolderImpl implements FileHolder {
   }
 
   /**
-   * This method will be used to read from file based on number of bytes to be read and positon
+   * This method will be used to read from file based on number of bytes to be read and position
    *
    * @param channel file channel
    * @param size    number of bytes
@@ -192,13 +195,29 @@ public class FileHolderImpl implements FileHolder {
     ByteBuffer byteBffer = read(fileChannel, CarbonCommonConstants.LONG_SIZE_IN_BYTE, offset);
     return byteBffer.getLong();
   }
-  @Override
-  public void readByteBuffer(String filePath, ByteBuffer byteBuffer,
-      long offset, int length) throws IOException {
+
+  @Override public ByteBuffer readByteBuffer(String filePath, long offset, int length)
+      throws IOException {
+    ByteBuffer byteBuffer = ByteBuffer.allocate(length);
     FileChannel fileChannel = updateCache(filePath);
     fileChannel.position(offset);
     fileChannel.read(byteBuffer);
     byteBuffer.rewind();
+    return byteBuffer;
   }
 
+  @Override public void setQueryId(String queryId) {
+    this.queryId = queryId;
+  }
+
+  @Override public String getQueryId() {
+    return queryId;
+  }
+
+  @Override public DataInputStream getDataInputStream(String filePath, long offset)
+      throws IOException {
+    FileInputStream stream = new FileInputStream(filePath);
+    stream.skip(offset);
+    return new DataInputStream(new BufferedInputStream(stream));
+  }
 }

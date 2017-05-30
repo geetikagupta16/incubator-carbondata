@@ -16,6 +16,8 @@
  */
 package org.apache.carbondata.core.datastore.impl;
 
+import java.io.BufferedInputStream;
+import java.io.DataInputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.HashMap;
@@ -29,12 +31,14 @@ import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 
-
 public class DFSFileHolderImpl implements FileHolder {
   /**
    * cache to hold filename and its stream
    */
   private Map<String, FSDataInputStream> fileNameAndStreamCache;
+
+  private String queryId;
+
 
   public DFSFileHolderImpl() {
     this.fileNameAndStreamCache =
@@ -67,7 +71,7 @@ public class DFSFileHolderImpl implements FileHolder {
   }
 
   /**
-   * This method will be used to read from file based on number of bytes to be read and positon
+   * This method will be used to read from file based on number of bytes to be read and position
    *
    * @param channel file channel
    * @param size    number of bytes
@@ -82,7 +86,7 @@ public class DFSFileHolderImpl implements FileHolder {
   }
 
   /**
-   * This method will be used to read from file based on number of bytes to be read and positon
+   * This method will be used to read from file based on number of bytes to be read and position
    *
    * @param channel file channel
    * @param size    number of bytes
@@ -131,11 +135,26 @@ public class DFSFileHolderImpl implements FileHolder {
     return fileChannel.readInt();
   }
 
-  @Override
-  public void readByteBuffer(String filePath, ByteBuffer byteBuffer,
-      long offset, int length) throws IOException {
+  @Override public ByteBuffer readByteBuffer(String filePath, long offset, int length)
+      throws IOException {
     byte[] readByteArray = readByteArray(filePath, offset, length);
-    byteBuffer.put(readByteArray);
+    ByteBuffer byteBuffer = ByteBuffer.wrap(readByteArray);
     byteBuffer.rewind();
+    return byteBuffer;
+  }
+
+  @Override public void setQueryId(String queryId) {
+    this.queryId = queryId;
+  }
+
+  @Override public String getQueryId() {
+    return queryId;
+  }
+
+  @Override public DataInputStream getDataInputStream(String filePath, long offset)
+      throws IOException {
+    FSDataInputStream fsDataInputStream = updateCache(filePath);
+    fsDataInputStream.seek(offset);
+    return new DataInputStream(new BufferedInputStream(fsDataInputStream, 1 * 1024 * 1024));
   }
 }

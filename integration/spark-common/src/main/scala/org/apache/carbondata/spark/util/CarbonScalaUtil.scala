@@ -17,19 +17,15 @@
 
 package org.apache.carbondata.spark.util
 
-import java.io.File
 import java.text.SimpleDateFormat
 
 import org.apache.spark.sql._
 import org.apache.spark.sql.execution.command.DataTypeInfo
 import org.apache.spark.sql.types._
 
-import org.apache.carbondata.common.logging.LogServiceFactory
 import org.apache.carbondata.core.constants.CarbonCommonConstants
-import org.apache.carbondata.core.datastore.impl.FileFactory
 import org.apache.carbondata.core.metadata.datatype.{DataType => CarbonDataType}
 import org.apache.carbondata.core.metadata.schema.table.column.CarbonColumn
-import org.apache.carbondata.core.util.CarbonProperties
 
 object CarbonScalaUtil {
   def convertSparkToCarbonDataType(
@@ -155,12 +151,12 @@ object CarbonScalaUtil {
   def validateColumnDataType(dataTypeInfo: DataTypeInfo, carbonColumn: CarbonColumn): Unit = {
     carbonColumn.getDataType.getName match {
       case "INT" =>
-        if (!dataTypeInfo.dataType.equals("bigint")) {
+        if (!dataTypeInfo.dataType.equals("bigint") && !dataTypeInfo.dataType.equals("long")) {
           sys
             .error(s"Given column ${ carbonColumn.getColName } with data type ${
               carbonColumn
                 .getDataType.getName
-            } cannot be modified. Int can only be changed to bigInt")
+            } cannot be modified. Int can only be changed to bigInt or long")
         }
       case "DECIMAL" =>
         if (!dataTypeInfo.dataType.equals("decimal")) {
@@ -177,11 +173,11 @@ object CarbonScalaUtil {
             } cannot be modified. Specified precision value ${
               dataTypeInfo
                 .precision
-            } should be greater or equal to current precision value ${
+            } should be greater than current precision value ${
               carbonColumn.getColumnSchema
                 .getPrecision
             }")
-        } else if (dataTypeInfo.scale <= carbonColumn.getColumnSchema.getScale) {
+        } else if (dataTypeInfo.scale < carbonColumn.getColumnSchema.getScale) {
           sys
             .error(s"Given column ${
               carbonColumn

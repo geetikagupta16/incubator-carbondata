@@ -40,6 +40,8 @@ import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.io.compress.BZip2Codec;
+import org.apache.hadoop.io.compress.CompressionCodec;
+import org.apache.hadoop.io.compress.CompressionCodecFactory;
 import org.apache.hadoop.io.compress.GzipCodec;
 
 public final class FileFactory {
@@ -131,11 +133,15 @@ public final class FileFactory {
         } else {
           stream = fs.open(pt, bufferSize);
         }
+        String codecName = null;
         if (gzip) {
-          GzipCodec codec = new GzipCodec();
-          stream = codec.createInputStream(stream);
+          codecName = GzipCodec.class.getName();
         } else if (bzip2) {
-          BZip2Codec codec = new BZip2Codec();
+          codecName = BZip2Codec.class.getName();
+        }
+        if (null != codecName) {
+          CompressionCodecFactory ccf = new CompressionCodecFactory(configuration);
+          CompressionCodec codec = ccf.getCodecByClassName(codecName);
           stream = codec.createInputStream(stream);
         }
         break;
@@ -191,8 +197,7 @@ public final class FileFactory {
       case VIEWFS:
         Path pt = new Path(path);
         FileSystem fs = pt.getFileSystem(configuration);
-        FSDataOutputStream stream = fs.create(pt, true);
-        return stream;
+        return fs.create(pt, true);
       default:
         return new DataOutputStream(new BufferedOutputStream(new FileOutputStream(path)));
     }
@@ -244,9 +249,7 @@ public final class FileFactory {
       case VIEWFS:
         Path pt = new Path(path);
         FileSystem fs = pt.getFileSystem(configuration);
-        FSDataOutputStream stream =
-            fs.create(pt, true, bufferSize, fs.getDefaultReplication(pt), blockSize);
-        return stream;
+        return fs.create(pt, true, bufferSize, fs.getDefaultReplication(pt), blockSize);
       default:
         path = getUpdatedFilePath(path, fileType);
         return new DataOutputStream(
@@ -402,8 +405,7 @@ public final class FileFactory {
       case VIEWFS:
         Path pt = new Path(path);
         FileSystem fs = pt.getFileSystem(configuration);
-        FSDataOutputStream stream = fs.append(pt);
-        return stream;
+        return fs.append(pt);
       default:
         return new DataOutputStream(new BufferedOutputStream(new FileOutputStream(path)));
     }
@@ -461,9 +463,18 @@ public final class FileFactory {
       case LOCAL:
       default:
         if (filePath != null && !filePath.isEmpty()) {
-          Path pathWithoutSchemeAndAuthority =
-              Path.getPathWithoutSchemeAndAuthority(new Path(filePath));
-          return pathWithoutSchemeAndAuthority.toString();
+          // If the store path is relative then convert to absolute path.
+          if (filePath.startsWith("./")) {
+            try {
+              return new File(filePath).getCanonicalPath();
+            } catch (IOException e) {
+              throw new RuntimeException(e);
+            }
+          } else {
+            Path pathWithoutSchemeAndAuthority =
+                Path.getPathWithoutSchemeAndAuthority(new Path(filePath));
+            return pathWithoutSchemeAndAuthority.toString();
+          }
         } else {
           return filePath;
         }

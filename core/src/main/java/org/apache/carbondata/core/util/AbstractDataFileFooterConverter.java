@@ -21,6 +21,7 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.BitSet;
 import java.util.List;
+import java.util.Map;
 
 import org.apache.carbondata.core.constants.CarbonCommonConstants;
 import org.apache.carbondata.core.datastore.block.BlockInfo;
@@ -38,6 +39,7 @@ import org.apache.carbondata.core.metadata.datatype.DataType;
 import org.apache.carbondata.core.metadata.encoder.Encoding;
 import org.apache.carbondata.core.metadata.schema.table.column.ColumnSchema;
 import org.apache.carbondata.core.reader.CarbonIndexFileReader;
+import org.apache.carbondata.core.util.path.CarbonTablePath;
 import org.apache.carbondata.format.BlockIndex;
 
 /**
@@ -87,24 +89,31 @@ public abstract class AbstractDataFileFooterConverter {
       SegmentInfo segmentInfo = getSegmentInfo(readIndexHeader.getSegment_info());
       BlockletIndex blockletIndex = null;
       int counter = 0;
+      int index = 0;
       DataFileFooter dataFileFooter = null;
       // read the block info from file
       while (indexReader.hasNext()) {
         BlockIndex readBlockIndexInfo = indexReader.readBlockIndexInfo();
         blockletIndex = getBlockletIndex(readBlockIndexInfo.getBlock_index());
         dataFileFooter = new DataFileFooter();
-        TableBlockInfo tableBlockInfo = tableBlockInfoList.get(counter++);
-        tableBlockInfo.setBlockOffset(readBlockIndexInfo.getOffset());
-        tableBlockInfo.setVersion(
-            ColumnarFormatVersion.valueOf((short) readIndexHeader.getVersion()));
-        int blockletSize = getBlockletSize(readBlockIndexInfo);
-        tableBlockInfo.getBlockletInfos().setNoOfBlockLets(blockletSize);
-        dataFileFooter.setBlockletIndex(blockletIndex);
-        dataFileFooter.setColumnInTable(columnSchemaList);
-        dataFileFooter.setNumberOfRows(readBlockIndexInfo.getNum_rows());
-        dataFileFooter.setBlockInfo(new BlockInfo(tableBlockInfo));
-        dataFileFooter.setSegmentInfo(segmentInfo);
-        dataFileFooters.add(dataFileFooter);
+        TableBlockInfo tableBlockInfo = tableBlockInfoList.get(index);
+        if (Integer.parseInt(CarbonTablePath.DataFileUtil.getPartNo(
+            tableBlockInfo.getFilePath())) == counter++) {
+          tableBlockInfo.setBlockOffset(readBlockIndexInfo.getOffset());
+          tableBlockInfo.setVersion(
+              ColumnarFormatVersion.valueOf((short) readIndexHeader.getVersion()));
+          int blockletSize = getBlockletSize(readBlockIndexInfo);
+          tableBlockInfo.getBlockletInfos().setNoOfBlockLets(blockletSize);
+          dataFileFooter.setBlockletIndex(blockletIndex);
+          dataFileFooter.setColumnInTable(columnSchemaList);
+          dataFileFooter.setNumberOfRows(readBlockIndexInfo.getNum_rows());
+          dataFileFooter.setBlockInfo(new BlockInfo(tableBlockInfo));
+          dataFileFooter.setSegmentInfo(segmentInfo);
+          dataFileFooters.add(dataFileFooter);
+          if (++index == tableBlockInfoList.size()) {
+            break;
+          }
+        }
       }
     } finally {
       indexReader.closeThriftReader();
@@ -195,6 +204,12 @@ public abstract class AbstractDataFileFooterConverter {
     wrapperColumnSchema.setColumnGroup(externalColumnSchema.getColumn_group_id());
     wrapperColumnSchema.setScale(externalColumnSchema.getScale());
     wrapperColumnSchema.setDefaultValue(externalColumnSchema.getDefault_value());
+    Map<String, String> properties = externalColumnSchema.getColumnProperties();
+    if (properties != null) {
+      if (properties.get(CarbonCommonConstants.SORT_COLUMNS) != null) {
+        wrapperColumnSchema.setSortColumn(true);
+      }
+    }
     return wrapperColumnSchema;
   }
 

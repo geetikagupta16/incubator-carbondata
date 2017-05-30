@@ -18,15 +18,12 @@
 package org.apache.spark.sql.execution.command
 
 import java.io.File
-import java.util.concurrent.Callable
-import java.util.concurrent.Executors
-import java.util.concurrent.ExecutorService
-import java.util.concurrent.Future
 
 import scala.collection.JavaConverters._
 import scala.language.implicitConversions
 
 import org.apache.commons.lang3.StringUtils
+import org.apache.spark.scheduler.{SparkListener, SparkListenerApplicationEnd}
 import org.apache.spark.sql._
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.analysis.UnresolvedAttribute
@@ -57,7 +54,7 @@ import org.apache.carbondata.processing.model.{CarbonDataLoadSchema, CarbonLoadM
 import org.apache.carbondata.processing.newflow.constants.DataLoadProcessorConstants
 import org.apache.carbondata.spark.exception.MalformedCarbonCommandException
 import org.apache.carbondata.spark.rdd.{CarbonDataRDDFactory, DataManagementFunc, DictionaryLoadModel}
-import org.apache.carbondata.spark.util.{CarbonScalaUtil, CommonUtil, GlobalDictionaryUtil}
+import org.apache.carbondata.spark.util.{CommonUtil, GlobalDictionaryUtil}
 
 object Checker {
   def validateTableExists(
@@ -145,7 +142,7 @@ case class CreateTable(cm: TableModel) extends RunnableCommand {
 
     val tableInfo: TableInfo = TableNewProcessor(cm)
 
-    if (tableInfo.getFactTable.getListOfColumns.size <= 0) {
+    if (tableInfo.getFactTable.getListOfColumns.isEmpty) {
       sys.error("No Dimensions found. Table should have at least one dimesnion !")
     }
 
@@ -200,10 +197,13 @@ private[sql] case class DeleteLoadsById(
 
   def run(sqlContext: SQLContext): Seq[Row] = {
     Checker.validateTableExists(databaseNameOp, tableName, sqlContext)
+    val carbonTable = CarbonEnv.get.carbonMetastore.lookupRelation1(databaseNameOp,
+      tableName)(sqlContext).asInstanceOf[CarbonRelation].tableMeta.carbonTable
     CarbonStore.deleteLoadById(
       loadids,
       getDB.getDatabaseName(databaseNameOp, sqlContext),
-      tableName
+      tableName,
+      carbonTable
     )
     Seq.empty
 
@@ -229,10 +229,13 @@ private[sql] case class DeleteLoadsByLoadDate(
 
   def run(sqlContext: SQLContext): Seq[Row] = {
     Checker.validateTableExists(databaseNameOp, tableName, sqlContext)
+    val carbonTable = CarbonEnv.get.carbonMetastore.lookupRelation1(databaseNameOp,
+      tableName)(sqlContext).asInstanceOf[CarbonRelation].tableMeta.carbonTable
     CarbonStore.deleteLoadByDate(
       loadDate,
       getDB.getDatabaseName(databaseNameOp, sqlContext),
-      tableName
+      tableName,
+      carbonTable
     )
     Seq.empty
 
@@ -403,8 +406,9 @@ case class LoadTable(
       val dateFormat = options.getOrElse("dateformat", null)
       validateDateFormat(dateFormat, table)
       val maxColumns = options.getOrElse("maxcolumns", null)
+      val sortScope = options.getOrElse("sort_scope", null)
+      val batchSortSizeInMB = options.getOrElse("batch_sort_size_inmb", null)
 
-      carbonLoadModel.setMaxColumns(checkDefaultValue(maxColumns, null))
       carbonLoadModel.setEscapeChar(checkDefaultValue(escapeChar, "\\"))
       carbonLoadModel.setQuoteChar(checkDefaultValue(quoteChar, "\""))
       carbonLoadModel.setCommentChar(checkDefaultValue(commentchar, "#"))
@@ -427,21 +431,21 @@ case class LoadTable(
       carbonLoadModel
         .setIsEmptyDataBadRecord(
           DataLoadProcessorConstants.IS_EMPTY_DATA_BAD_RECORD + "," + isEmptyDataBadRecord)
+      carbonLoadModel.setSortScope(sortScope)
+      carbonLoadModel.setBatchSortSizeInMb(batchSortSizeInMB)
       // when single_pass=true, and not use all dict
       val useOnePass = options.getOrElse("single_pass", "false").trim.toLowerCase match {
         case "true" =>
-          if (StringUtils.isEmpty(allDictionaryPath)) {
+          true
+        case "false" =>
+          if (!StringUtils.isEmpty(allDictionaryPath)) {
             true
           } else {
-            LOGGER.error("Can't use single_pass, because SINGLE_PASS and ALL_DICTIONARY_PATH" +
-              "can not be used together")
             false
           }
-        case "false" =>
-          false
         case illegal =>
           LOGGER.error(s"Can't use single_pass, because illegal syntax found: [" + illegal + "] " +
-            "Please set it as 'true' or 'false'")
+                       "Please set it as 'true' or 'false'")
           false
       }
       carbonLoadModel.setUseOnePass(useOnePass)
@@ -462,9 +466,6 @@ case class LoadTable(
 
       val partitionStatus = CarbonCommonConstants.STORE_LOADSTATUS_SUCCESS
 
-      var result: Future[DictionaryServer] = null
-      var executorService: ExecutorService = null
-
       try {
         // First system has to partition the data first and then call the load data
         LOGGER.info(s"Initiating Direct Load for the Table : ($dbName.$tableName)")
@@ -474,50 +475,72 @@ case class LoadTable(
         carbonLoadModel.setColDictFilePath(columnDict)
         carbonLoadModel.setDirectLoad(true)
         carbonLoadModel.setCsvHeaderColumns(CommonUtil.getCsvHeaderColumns(carbonLoadModel))
+        val validatedMaxColumns = CommonUtil.validateMaxColumns(carbonLoadModel.getCsvHeaderColumns,
+          maxColumns)
+        carbonLoadModel.setMaxColumns(validatedMaxColumns.toString)
         GlobalDictionaryUtil.updateTableMetadataFunc = updateTableMetadata
-
+        val storePath = relation.tableMeta.storePath
+        val carbonTable = carbonLoadModel.getCarbonDataLoadSchema.getCarbonTable
+        val carbonTableIdentifier = carbonTable.getAbsoluteTableIdentifier
+          .getCarbonTableIdentifier
+        val carbonTablePath = CarbonStorePath
+          .getCarbonTablePath(storePath, carbonTableIdentifier)
+        val dictFolderPath = carbonTablePath.getMetadataDirectoryPath
+        val dimensions = carbonTable.getDimensionByTableName(
+          carbonTable.getFactTableName).asScala.toArray
         if (carbonLoadModel.getUseOnePass) {
           val colDictFilePath = carbonLoadModel.getColDictFilePath
-          if (colDictFilePath != null) {
-            val storePath = relation.tableMeta.storePath
-            val carbonTable = carbonLoadModel.getCarbonDataLoadSchema.getCarbonTable
-            val carbonTableIdentifier = carbonTable.getAbsoluteTableIdentifier
-              .getCarbonTableIdentifier
-            val carbonTablePath = CarbonStorePath
-              .getCarbonTablePath(storePath, carbonTableIdentifier)
-            val dictFolderPath = carbonTablePath.getMetadataDirectoryPath
-            val dimensions = carbonTable.getDimensionByTableName(
-              carbonTable.getFactTableName).asScala.toArray
+          if (!StringUtils.isEmpty(colDictFilePath)) {
             carbonLoadModel.initPredefDictMap()
             // generate predefined dictionary
             GlobalDictionaryUtil
               .generatePredefinedColDictionary(colDictFilePath, carbonTableIdentifier,
                 dimensions, carbonLoadModel, sqlContext, storePath, dictFolderPath)
           }
+          val allDictPath: String = carbonLoadModel.getAllDictPath
+          if(!StringUtils.isEmpty(allDictPath)) {
+            carbonLoadModel.initPredefDictMap()
+            GlobalDictionaryUtil
+              .generateDictionaryFromDictionaryFiles(sqlContext,
+                carbonLoadModel,
+                storePath,
+                carbonTableIdentifier,
+                dictFolderPath,
+                dimensions,
+                allDictionaryPath)
+          }
           // dictionaryServerClient dictionary generator
           val dictionaryServerPort = CarbonProperties.getInstance()
             .getProperty(CarbonCommonConstants.DICTIONARY_SERVER_PORT,
               CarbonCommonConstants.DICTIONARY_SERVER_PORT_DEFAULT)
-          carbonLoadModel.setDictionaryServerPort(Integer.parseInt(dictionaryServerPort))
           val sparkDriverHost = sqlContext.sparkContext.getConf.get("spark.driver.host")
           carbonLoadModel.setDictionaryServerHost(sparkDriverHost)
-          // start dictionary server when use one pass load.
-          executorService = Executors.newFixedThreadPool(1)
-          result = executorService.submit(new Callable[DictionaryServer]() {
-            @throws[Exception]
-            def call: DictionaryServer = {
-              Thread.currentThread().setName("Dictionary server")
-              val server: DictionaryServer = new DictionaryServer
-              server.startServer(dictionaryServerPort.toInt)
-              server
-            }
-          })
+          // start dictionary server when use one pass load and dimension with DICTIONARY
+          // encoding is present.
+          val allDimensions = table.getAllDimensions.asScala.toList
+          val createDictionary = allDimensions.exists {
+            carbonDimension => carbonDimension.hasEncoding(Encoding.DICTIONARY) &&
+              !carbonDimension.hasEncoding(Encoding.DIRECT_DICTIONARY)
+          }
+          val server: Option[DictionaryServer] = if (createDictionary) {
+            val dictionaryServer = DictionaryServer
+              .getInstance(dictionaryServerPort.toInt)
+            carbonLoadModel.setDictionaryServerPort(dictionaryServer.getPort)
+            sqlContext.sparkContext.addSparkListener(new SparkListener() {
+              override def onApplicationEnd(applicationEnd: SparkListenerApplicationEnd) {
+                dictionaryServer.shutdown()
+              }
+            })
+            Some(dictionaryServer)
+          } else {
+            None
+          }
           CarbonDataRDDFactory.loadCarbonData(sqlContext,
             carbonLoadModel,
             relation.tableMeta.storePath,
             columnar,
             partitionStatus,
-            result,
+            server,
             dataFrame,
             updateModel)
         } else {
@@ -562,7 +585,7 @@ case class LoadTable(
             relation.tableMeta.storePath,
             columnar,
             partitionStatus,
-            result,
+            None,
             loadDataFrame,
             updateModel)
         }
@@ -574,10 +597,6 @@ case class LoadTable(
       } finally {
         // Once the data load is successful delete the unwanted partition files
         try {
-          // shutdown dictionary server thread
-          if (carbonLoadModel.getUseOnePass) {
-            executorService.shutdownNow()
-          }
           val fileType = FileFactory.getFileType(partitionLocation)
           if (FileFactory.isFileExist(partitionLocation, fileType)) {
             val file = FileFactory
@@ -635,8 +654,15 @@ case class LoadTable(
     // write TableInfo
     CarbonMetastore.writeThriftTableToSchemaFile(schemaFilePath, tableInfo)
 
-    // update Metadata
+
     val catalog = CarbonEnv.get.carbonMetastore
+
+    // upate the schema modified time
+    catalog.updateSchemasUpdatedTime(catalog.touchSchemaFileSystemTime(
+      carbonLoadModel.getDatabaseName,
+      carbonLoadModel.getTableName))
+
+    // update Metadata
     catalog.updateMetadataByThriftTable(schemaFilePath, tableInfo,
       model.table.getDatabaseName, model.table.getTableName, carbonLoadModel.getStorePath)
 
@@ -682,8 +708,9 @@ private[sql] case class DropTableCommand(ifExistsSet: Boolean, databaseNameOp: O
     val dbName = getDB.getDatabaseName(databaseNameOp, sqlContext)
     val identifier = TableIdentifier(tableName, Option(dbName))
     val carbonTableIdentifier = new CarbonTableIdentifier(dbName, tableName, "")
-    val carbonLock = CarbonLockFactory
-      .getCarbonLockObj(carbonTableIdentifier, LockUsage.DROP_TABLE_LOCK)
+    val carbonLock = CarbonLockFactory.getCarbonLockObj(carbonTableIdentifier.getDatabaseName,
+        carbonTableIdentifier.getTableName + CarbonCommonConstants.UNDERSCORE +
+        LockUsage.DROP_TABLE_LOCK)
     val storePath = CarbonEnv.get.carbonMetastore.storePath
     var isLocked = false
     try {
@@ -732,10 +759,13 @@ private[sql] case class ShowLoads(
 
   override def run(sqlContext: SQLContext): Seq[Row] = {
     Checker.validateTableExists(databaseNameOp, tableName, sqlContext)
+    val carbonTable = CarbonEnv.get.carbonMetastore.lookupRelation1(databaseNameOp,
+      tableName)(sqlContext).asInstanceOf[CarbonRelation].tableMeta.carbonTable
     CarbonStore.showSegments(
       getDB.getDatabaseName(databaseNameOp, sqlContext),
       tableName,
-      limit
+      limit,
+      carbonTable.getMetaDataFilepath
     )
   }
 }
@@ -874,10 +904,13 @@ private[sql] case class CleanFiles(
 
   def run(sqlContext: SQLContext): Seq[Row] = {
     Checker.validateTableExists(databaseNameOp, tableName, sqlContext)
+    val carbonTable = CarbonEnv.get.carbonMetastore.lookupRelation1(databaseNameOp,
+      tableName)(sqlContext).asInstanceOf[CarbonRelation].tableMeta.carbonTable
     CarbonStore.cleanFiles(
       getDB.getDatabaseName(databaseNameOp, sqlContext),
       tableName,
-      sqlContext.asInstanceOf[CarbonContext].storePath
+      sqlContext.asInstanceOf[CarbonContext].storePath,
+      carbonTable
     )
     Seq.empty
   }

@@ -167,6 +167,10 @@ public class RowLevelFilterExecuterImpl implements FilterExecuter {
             blockChunkHolder.getDimensionRawDataChunk()[dimensionBlocksIndex[0]].getPagesCount();
         numberOfRows =
             blockChunkHolder.getDimensionRawDataChunk()[dimensionBlocksIndex[0]].getRowCount();
+      } else {
+        // specific for restructure case where default values need to be filled
+        pageNumbers = blockChunkHolder.getDataBlock().numberOfPages();
+        numberOfRows = new int[] { blockChunkHolder.getDataBlock().nodeSize() };
       }
     }
     if (msrColEvalutorInfoList.size() > 0) {
@@ -175,6 +179,10 @@ public class RowLevelFilterExecuterImpl implements FilterExecuter {
             blockChunkHolder.getMeasureRawDataChunk()[measureBlocksIndex[0]].getPagesCount();
         numberOfRows =
             blockChunkHolder.getMeasureRawDataChunk()[measureBlocksIndex[0]].getRowCount();
+      } else {
+        // specific for restructure case where default values need to be filled
+        pageNumbers = blockChunkHolder.getDataBlock().numberOfPages();
+        numberOfRows = new int[] { blockChunkHolder.getDataBlock().nodeSize() };
       }
     }
     BitSetGroup bitSetGroup = new BitSetGroup(pageNumbers);
@@ -246,7 +254,8 @@ public class RowLevelFilterExecuterImpl implements FilterExecuter {
               memberBytes = null;
             }
             record[dimColumnEvaluatorInfo.getRowIndex()] = DataTypeUtil
-                .getDataBasedOnDataType(memberBytes, dimColumnEvaluatorInfo.getDimension());
+                .getDataBasedOnDataTypeForNoDictionaryColumn(memberBytes,
+                    dimColumnEvaluatorInfo.getDimension().getDataType());
           } else {
             continue;
           }
@@ -288,7 +297,12 @@ public class RowLevelFilterExecuterImpl implements FilterExecuter {
     for (int i = 0; i < msrColEvalutorInfoList.size(); i++) {
       MeasureColumnResolvedFilterInfo msrColumnEvalutorInfo = msrColEvalutorInfoList.get(i);
       switch (msrColumnEvalutorInfo.getType()) {
+        case SHORT:
+          msrType = DataType.SHORT;
+          break;
         case INT:
+          msrType = DataType.INT;
+          break;
         case LONG:
           msrType = DataType.LONG;
           break;
@@ -313,7 +327,14 @@ public class RowLevelFilterExecuterImpl implements FilterExecuter {
           blockChunkHolder.getMeasureRawDataChunk()[measureBlocksIndex[0]]
               .convertToMeasureColDataChunk(pageIndex);
       switch (msrType) {
+        case SHORT:
+          msrValue = (short) measureColumnDataChunk.getMeasureDataHolder()
+              .getReadableLongValueByIndex(index);
+          break;
         case INT:
+          msrValue =
+              (int)measureColumnDataChunk.getMeasureDataHolder().getReadableLongValueByIndex(index);
+          break;
         case LONG:
           msrValue =
               measureColumnDataChunk.getMeasureDataHolder().getReadableLongValueByIndex(index);
@@ -422,8 +443,7 @@ public class RowLevelFilterExecuterImpl implements FilterExecuter {
     if (dimColumnEvaluatorInfo.getDimension().isColumnar()) {
       byte[] rawData = dataChunk.getChunkData(index);
       ByteBuffer byteBuffer = ByteBuffer.allocate(CarbonCommonConstants.INT_SIZE_IN_BYTE);
-      int dictionaryValue = CarbonUtil.getSurrogateKey(rawData, byteBuffer);
-      return dictionaryValue;
+      return CarbonUtil.getSurrogateKey(rawData, byteBuffer);
     } else {
       return readSurrogatesFromColumnGroupBlock(dataChunk, index, dimColumnEvaluatorInfo);
     }
@@ -444,9 +464,8 @@ public class RowLevelFilterExecuterImpl implements FilterExecuter {
       long[] result = keyStructureInfo.getKeyGenerator().getKeyArray(colData);
       int colGroupId =
           QueryUtil.getColumnGroupId(segmentProperties, dimensionBlocksIndex[0]);
-      int dictionaryValue = (int) result[segmentProperties
+      return (int) result[segmentProperties
           .getColumnGroupMdKeyOrdinal(colGroupId, dimensionBlocksIndex[0])];
-      return dictionaryValue;
     } catch (KeyGenException e) {
       LOGGER.error(e);
     }

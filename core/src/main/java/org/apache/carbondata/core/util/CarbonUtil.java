@@ -641,6 +641,24 @@ public final class CarbonUtil {
   }
 
   /**
+   * remove the quote char for a string, e.g. "abc" => abc, 'abc' => abc
+   * @param parseStr
+   * @return
+   */
+  public static String unquoteChar(String parseStr) {
+    if (parseStr == null) {
+      return null;
+    }
+    if (parseStr.startsWith("'") && parseStr.endsWith("'")) {
+      return parseStr.substring(1, parseStr.length() - 1);
+    } else if (parseStr.startsWith("\"") && parseStr.endsWith("\"")) {
+      return parseStr.substring(1, parseStr.length() - 1);
+    } else {
+      return parseStr;
+    }
+  }
+
+  /**
    * special char delimiter Converter
    *
    * @param delimiter
@@ -704,9 +722,8 @@ public final class CarbonUtil {
     if (null == prop) {
       return null;
     }
-    String basePath = prop.getProperty(CarbonCommonConstants.STORE_LOCATION,
+    return prop.getProperty(CarbonCommonConstants.STORE_LOCATION,
         CarbonCommonConstants.STORE_LOCATION_DEFAULT_VAL);
-    return basePath;
   }
 
   /**
@@ -816,10 +833,10 @@ public final class CarbonUtil {
     Object[] minValue = new Object[encodeMetaList.size()];
     Object[] uniqueValue = new Object[encodeMetaList.size()];
     int[] decimal = new int[encodeMetaList.size()];
-    char[] type = new char[encodeMetaList.size()];
+    DataType[] type = new DataType[encodeMetaList.size()];
     byte[] dataTypeSelected = new byte[encodeMetaList.size()];
 
-    /**
+    /*
      * to fill the meta data required for value compression model
      */
     for (int i = 0; i < dataTypeSelected.length; i++) {  // always 1
@@ -960,8 +977,8 @@ public final class CarbonUtil {
    * @return surrogate key
    */
   public static int getSurrogateKey(byte[] data, ByteBuffer buffer) {
-    int lenght = 4 - data.length;
-    for (int i = 0; i < lenght; i++) {
+    int length = 4 - data.length;
+    for (int i = 0; i < length; i++) {
       buffer.put((byte) 0);
     }
     buffer.put(data);
@@ -990,7 +1007,9 @@ public final class CarbonUtil {
     //TODO need to pass proper partition number when partiton will be supported
     String carbonIndexFilePath = carbonTablePath
         .getCarbonIndexFilePath(taskId, "0", tableBlockInfoList.get(0).getSegmentId(),
-            bucketNumber);
+            bucketNumber, CarbonTablePath.DataFileUtil
+                .getTimeStampFromFileName(tableBlockInfoList.get(0).getFilePath()),
+            tableBlockInfoList.get(0).getVersion());
     CarbonFile carbonFile = FileFactory
         .getCarbonFile(carbonIndexFilePath, FileFactory.getFileType(carbonIndexFilePath));
     // in case of carbonIndex file whole file is meta only so reading complete file.
@@ -1037,9 +1056,8 @@ public final class CarbonUtil {
         isDictionaryDimensions.add(false);
       }
     }
-    boolean[] primitive = ArrayUtils
+    return ArrayUtils
         .toPrimitive(isDictionaryDimensions.toArray(new Boolean[isDictionaryDimensions.size()]));
-    return primitive;
   }
 
   /**
@@ -1232,7 +1250,9 @@ public final class CarbonUtil {
     //TODO need to pass proper partition number when partiton will be supported
     String carbonIndexFilePath = carbonTablePath
         .getCarbonIndexFilePath(taskId, "0", tableBlockInfoList.get(0).getSegmentId(),
-            bucketNumber);
+            bucketNumber, CarbonTablePath.DataFileUtil
+                .getTimeStampFromFileName(tableBlockInfoList.get(0).getFilePath()),
+            tableBlockInfoList.get(0).getVersion());
     DataFileFooterConverter fileFooterConverter = new DataFileFooterConverter();
     // read the index info and return
     return fileFooterConverter.getIndexInfo(carbonIndexFilePath, tableBlockInfoList);
@@ -1351,26 +1371,22 @@ public final class CarbonUtil {
 
   public static DataChunk3 readDataChunk3(ByteBuffer dataChunkBuffer, int offset, int length)
       throws IOException {
-    byte[] data = new byte[length];
-    dataChunkBuffer.position(offset);
-    dataChunkBuffer.get(data);
+    byte[] data = dataChunkBuffer.array();
     return (DataChunk3) read(data, new ThriftReader.TBaseCreator() {
       @Override public TBase create() {
         return new DataChunk3();
       }
-    }, 0, length);
+    }, offset, length);
   }
 
   public static DataChunk2 readDataChunk(ByteBuffer dataChunkBuffer, int offset, int length)
       throws IOException {
-    byte[] data = new byte[length];
-    dataChunkBuffer.position(offset);
-    dataChunkBuffer.get(data);
+    byte[] data = dataChunkBuffer.array();
     return (DataChunk2) read(data, new ThriftReader.TBaseCreator() {
       @Override public TBase create() {
         return new DataChunk2();
       }
-    }, 0, length);
+    }, offset, length);
   }
 
   /**
@@ -1427,7 +1443,7 @@ public final class CarbonUtil {
     ValueEncoderMeta valueEncoderMeta = new ValueEncoderMeta();
     valueEncoderMeta.setType(measureType);
     switch (measureType) {
-      case CarbonCommonConstants.SUM_COUNT_VALUE_MEASURE:
+      case CarbonCommonConstants.DOUBLE_MEASURE:
         valueEncoderMeta.setMaxValue(buffer.getDouble());
         valueEncoderMeta.setMinValue(buffer.getDouble());
         valueEncoderMeta.setUniqueValue(buffer.getDouble());
@@ -1576,14 +1592,13 @@ public final class CarbonUtil {
       return true;
     }
 
-    UpdateVO updatedVODetails = invalidBlockVOForSegmentId;
-    if (null != updatedVODetails) {
+    if (null != invalidBlockVOForSegmentId) {
       Long blockTimeStamp = Long.parseLong(tableInfo.getFilePath()
           .substring(tableInfo.getFilePath().lastIndexOf('-') + 1,
               tableInfo.getFilePath().lastIndexOf('.')));
-      if ((blockTimeStamp > updatedVODetails.getFactTimestamp() && (
-          updatedVODetails.getUpdateDeltaStartTimestamp() != null
-              && blockTimeStamp < updatedVODetails.getUpdateDeltaStartTimestamp()))) {
+      if ((blockTimeStamp > invalidBlockVOForSegmentId.getFactTimestamp() && (
+          invalidBlockVOForSegmentId.getUpdateDeltaStartTimestamp() != null
+              && blockTimeStamp < invalidBlockVOForSegmentId.getUpdateDeltaStartTimestamp()))) {
         return true;
       }
     }

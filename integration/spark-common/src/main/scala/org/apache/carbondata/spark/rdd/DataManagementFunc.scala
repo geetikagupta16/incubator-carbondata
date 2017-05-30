@@ -33,10 +33,11 @@ import org.apache.carbondata.core.metadata.{CarbonMetadata, CarbonTableIdentifie
 import org.apache.carbondata.core.metadata.schema.table.CarbonTable
 import org.apache.carbondata.core.mutate.CarbonUpdateUtil
 import org.apache.carbondata.core.statusmanager.{LoadMetadataDetails, SegmentStatusManager}
+import org.apache.carbondata.processing.merger.{CarbonDataMergerUtil, CompactionType}
 import org.apache.carbondata.processing.model.{CarbonDataLoadSchema, CarbonLoadModel}
 import org.apache.carbondata.spark._
+import org.apache.carbondata.spark.compaction.CompactionCallable
 import org.apache.carbondata.spark.load._
-import org.apache.carbondata.spark.merger.{CarbonDataMergerUtil, CompactionCallable, CompactionType}
 import org.apache.carbondata.spark.util.{CommonUtil, LoadMetadataUtil}
 
 /**
@@ -296,11 +297,10 @@ object DataManagementFunc {
       dbName: String,
       tableName: String,
       storePath: String,
-      isForceDeletion: Boolean): Unit = {
-    if (LoadMetadataUtil.isLoadDeletionRequired(dbName, tableName)) {
-      val loadMetadataFilePath =
-        CarbonLoaderUtil.extractLoadMetadataFileLocation(dbName, tableName)
-      val details = SegmentStatusManager.readLoadMetadata(loadMetadataFilePath)
+      isForceDeletion: Boolean,
+      carbonTable: CarbonTable): Unit = {
+    if (LoadMetadataUtil.isLoadDeletionRequired(carbonTable.getMetaDataFilepath)) {
+      val details = SegmentStatusManager.readLoadMetadata(carbonTable.getMetaDataFilepath)
       val carbonTableStatusLock =
         CarbonLockFactory.getCarbonLockObj(
           new CarbonTableIdentifier(dbName, tableName, ""),
@@ -324,7 +324,8 @@ object DataManagementFunc {
             LOGGER.info("Table status lock has been successfully acquired.")
 
             // read latest table status again.
-            val latestMetadata = SegmentStatusManager.readLoadMetadata(loadMetadataFilePath)
+            val latestMetadata = SegmentStatusManager
+              .readLoadMetadata(carbonTable.getMetaDataFilepath)
 
             // update the metadata details from old to new status.
             val latestStatus = CarbonLoaderUtil
@@ -350,14 +351,16 @@ object DataManagementFunc {
   def cleanFiles(
       dbName: String,
       tableName: String,
-      storePath: String): Unit = {
+      storePath: String,
+      carbonTable: CarbonTable): Unit = {
     val identifier = new CarbonTableIdentifier(dbName, tableName, "")
     val carbonCleanFilesLock =
       CarbonLockFactory.getCarbonLockObj(identifier, LockUsage.CLEAN_FILES_LOCK)
     try {
       if (carbonCleanFilesLock.lockWithRetries()) {
         LOGGER.info("Clean files lock has been successfully acquired.")
-        deleteLoadsAndUpdateMetadata(dbName, tableName, storePath, isForceDeletion = true)
+        deleteLoadsAndUpdateMetadata(dbName, tableName, storePath,
+          isForceDeletion = true, carbonTable)
       } else {
         val errorMsg = "Clean files request is failed for " +
             s"$dbName.$tableName" +

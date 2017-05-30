@@ -631,7 +631,7 @@ public final class CarbonCommonConstants {
   /**
    * DOUBLE_VALUE_MEASURE
    */
-  public static final char SUM_COUNT_VALUE_MEASURE = 'n';
+  public static final char DOUBLE_MEASURE = 'n';
   /**
    * BYTE_VALUE_MEASURE
    */
@@ -645,12 +645,6 @@ public final class CarbonCommonConstants {
    * BIG_INT_MEASURE
    */
   public static final char BIG_INT_MEASURE = 'd';
-
-  /**
-   * This determines the size of array to be processed in data load steps. one
-   * for dimensions , one of ignore dictionary dimensions , one for measures.
-   */
-  public static final int ARRAYSIZE = 3;
 
   /**
    * CARBON_PREFETCH_BUFFERSIZE
@@ -698,6 +692,16 @@ public final class CarbonCommonConstants {
    * maximum dictionary chunk size that can be kept in memory while writing dictionary file
    */
   public static final String DICTIONARY_ONE_CHUNK_SIZE = "carbon.dictionary.chunk.size";
+
+  /**
+   *  Dictionary Server Worker Threads
+   */
+  public static final String DICTIONARY_WORKER_THREADS = "dictionary.worker.threads";
+
+  /**
+   *  Dictionary Server Worker Threads
+   */
+  public static final String DICTIONARY_WORKER_THREADS_DEFAULT = "1";
 
   /**
    * dictionary chunk default size
@@ -805,8 +809,11 @@ public final class CarbonCommonConstants {
   public static final String COLUMN_GROUPS = "column_groups";
   public static final String DICTIONARY_EXCLUDE = "dictionary_exclude";
   public static final String DICTIONARY_INCLUDE = "dictionary_include";
-  public static final String PARTITIONCLASS = "partitionclass";
-  public static final String PARTITIONCOUNT = "partitioncount";
+  public static final String SORT_COLUMNS = "sort_columns";
+  public static final String PARTITION_TYPE = "partition_type";
+  public static final String NUM_PARTITIONS = "num_partitions";
+  public static final String RANGE_INFO = "range_info";
+  public static final String LIST_INFO = "list_info";
   public static final String COLUMN_PROPERTIES = "columnproperties";
   // table block size in MB
   public static final String TABLE_BLOCKSIZE = "table_blocksize";
@@ -1081,7 +1088,7 @@ public final class CarbonCommonConstants {
 
   public static final String ENABLE_INMEMORY_MERGE_SORT = "enable.inmemory.merge.sort";
 
-  public static final String ENABLE_INMEMORY_MERGE_SORT_DEFAULT = "true";
+  public static final String ENABLE_INMEMORY_MERGE_SORT_DEFAULT = "false";
 
   public static final String OFFHEAP_SORT_CHUNK_SIZE_IN_MB = "offheap.sort.chunk.size.inmb";
 
@@ -1094,15 +1101,15 @@ public final class CarbonCommonConstants {
   /**
    * Sorts the data in batches and writes the batch data to store with index file.
    */
-  public static final String LOAD_USE_BATCH_SORT = "carbon.load.use.batch.sort";
+  public static final String LOAD_SORT_SCOPE = "carbon.load.sort.scope";
 
   /**
-   * If set to true, the sorting scope is smaller and more index tree will be created,
+   * If set to BATCH_SORT, the sorting scope is smaller and more index tree will be created,
    * thus loading is faster but query maybe slower.
-   * If set to false, the sorting scope is bigger and one index tree per data node will be created,
-   * thus loading is slower but query is faster.
+   * If set to LOCAL_SORT, the sorting scope is bigger and one index tree per data node will be
+   * created, thus loading is slower but query is faster.
    */
-  public static final String LOAD_USE_BATCH_SORT_DEFAULT = "false";
+  public static final String LOAD_SORT_SCOPE_DEFAULT = "LOCAL_SORT";
 
   /**
    * Size of batch data to keep in memory, as a thumb rule it supposed
