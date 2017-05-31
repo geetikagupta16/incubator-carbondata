@@ -30,10 +30,10 @@ import com.facebook.presto.spi.RecordCursor;
 import com.facebook.presto.spi.RecordSet;
 import com.facebook.presto.spi.block.Block;
 import com.facebook.presto.spi.block.BlockBuilder;
-import com.facebook.presto.spi.block.BlockBuilderStatus;
 import com.facebook.presto.spi.block.IntArrayBlock;
 import com.facebook.presto.spi.block.InterleavedBlock;
 import com.facebook.presto.spi.block.LongArrayBlock;
+import com.facebook.presto.spi.block.ShortArrayBlock;
 import com.facebook.presto.spi.block.SliceArrayBlock;
 import com.facebook.presto.spi.type.DecimalType;
 import com.facebook.presto.spi.type.Type;
@@ -57,8 +57,8 @@ public class CarbondataPageSource implements ConnectorPageSource {
   private final RecordCursor cursor;
   private final List<Type> types;
   private final PageBuilder pageBuilder;
-  private boolean closed;
   private final char[] buffer = new char[100];
+  private boolean closed;
 
   public CarbondataPageSource(RecordSet recordSet) {
     this(requireNonNull(recordSet, "recordSet is null").getColumnTypes(), recordSet.cursor());
@@ -168,17 +168,46 @@ public class CarbondataPageSource implements ConnectorPageSource {
       Object[] data = (Object[]) val;
       List<Type> structElemTypes = type.getTypeParameters();
       Block[] dataBlock = new Block[structElemTypes.size()];
-      for(int i=0;i <structElemTypes.size(); i++) {
-        switch(structElemTypes.get(i).getDisplayName()) {
-          case "integer" : int x = (Integer) data[i];
-          dataBlock[i] = new IntArrayBlock(1, isNull, new int[]{x});
-          break;
-          case "varchar" : Slice slice = utf8Slice((String)data[i]);
-            dataBlock[i] = new SliceArrayBlock(1, new Slice[]{slice});
+      for (int i = 0; i < structElemTypes.size(); i++) {
+        boolean[] isElemNull = new boolean[] {isNull[i]};
+        switch (structElemTypes.get(i).getDisplayName()) {
+          case "integer":
+            Integer[] intData = new Integer[] { (Integer) data[i] };
+            dataBlock[i] = new IntArrayBlock(intData.length, isElemNull, getIntData(intData));
             break;
+          case "smallint":
+            Short[] shortData = new Short[] { (Short) data[i] };
+            dataBlock[i] = new ShortArrayBlock(shortData.length, isElemNull, getShortData(shortData));
+            break;
+          case "varchar":
+            Slice slice = utf8Slice((String) data[i]);
+            dataBlock[i] = new SliceArrayBlock(1, new Slice[] { slice });
+            break;
+          case "timestamp":
+          case "bigint":
+          case "long":
+            Long[] longValue = new Long[] { (Long) data[i] };
+            dataBlock[i] = new LongArrayBlock(longValue.length, isElemNull, getLongData(longValue));
+            break;
+          case "boolean":
+            Slice booleanData = utf8Slice(Boolean.toString((Boolean) data[i]));
+            dataBlock[i] = new SliceArrayBlock(1, new Slice[] { booleanData });
+            break;
+          case "float":
+          case "double":
+            Double[] doubleData = new Double[] { (Double) data[i] };
+            dataBlock[i] =
+                new LongArrayBlock(doubleData.length, isElemNull, getLongDataForDouble(doubleData));
+            break;
+          default:
+            BigDecimal[] longForDecimal = new BigDecimal[] { (BigDecimal) data[i] };
+            dataBlock[i] = new LongArrayBlock(longForDecimal.length, isElemNull,
+                getLongDataForDecimal(longForDecimal));
         }
       }
-type.writeObject(output, new InterleavedBlock(dataBlock));
+
+      type.writeObject(output, new InterleavedBlock(dataBlock));
+
     } else {
       switch (arrClassName) {
         case "Integer":
@@ -197,7 +226,8 @@ type.writeObject(output, new InterleavedBlock(dataBlock));
         case "Float":
           Double[] data = (Double[]) val;
           long[] doubleLongData = getLongDataForDouble(data);
-          type.writeObject(output, new LongArrayBlock(doubleLongData.length, isNull, doubleLongData));
+          type.writeObject(output,
+              new LongArrayBlock(doubleLongData.length, isNull, doubleLongData));
           break;
         case "Boolean":
           Slice[] booleanSlices = getBooleanSlices(val);
@@ -210,6 +240,15 @@ type.writeObject(output, new InterleavedBlock(dataBlock));
               new LongArrayBlock(longDecimalValues.length, isNull, longDecimalValues));
       }
     }
+  }
+
+  private short[] getShortData(Short[] shortData) {
+    short[] data = new short[shortData.length];
+    for (int i = 0; i < data.length; i++) {
+      // insert some dummy data for null values in int column
+      data[i] = Objects.isNull(shortData[i]) ? 0 : shortData[i];
+    }
+    return data;
   }
 
   private int[] getIntData(Integer[] intData) {

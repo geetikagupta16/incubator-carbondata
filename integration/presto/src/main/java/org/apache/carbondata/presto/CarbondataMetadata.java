@@ -293,8 +293,8 @@ public class CarbondataMetadata implements ConnectorMetadata {
     ColumnSchema columnSchema = carbonDimension.getColumnSchema();
     DataType colType = columnSchema.getDataType();
     if (colType == ARRAY) {
-      return new ArrayType(CarbondataType2SpiMapper(
-          carbonDimension.getListOfChildDimensions().get(0).getColumnSchema()));
+      return new ArrayType(CarbondataType2SpiMapperForComplex(
+          carbonDimension.getListOfChildDimensions().get(0)));
     } else if(colType == STRUCT) {
       List<CarbonDimension> childDimensions = carbonDimension.getListOfChildDimensions();
       List<Type> fieldTypes = new ArrayList<>(childDimensions.size());
@@ -304,7 +304,7 @@ public class CarbondataMetadata implements ConnectorMetadata {
         fieldNames.add(childDimensions.get(i).getColName());
       }
       return new RowType(fieldTypes, Optional.of(fieldNames));
-    }
+    } else
     return CarbondataType2SpiMapper(columnSchema);
   }
 
@@ -324,7 +324,7 @@ public class CarbondataMetadata implements ConnectorMetadata {
       case DOUBLE:
         return DoubleType.DOUBLE;
       case DECIMAL:
-        getDecimalType(columnSchema);
+        return getDecimalType(columnSchema);
       case STRING:
         return VarcharType.VARCHAR;
       case DATE:
