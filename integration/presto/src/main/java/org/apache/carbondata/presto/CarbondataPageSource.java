@@ -159,6 +159,12 @@ public class CarbondataPageSource implements ConnectorPageSource {
     }
   }
 
+  /**
+   * Write primitive datatype of complex datatype of carbon
+   * @param val
+   * @param output
+   * @param type
+     */
   private void writeObject(Object val, BlockBuilder output, Type type) {
     Class arrTypeClass = val.getClass().getComponentType();
     String arrClassName = arrTypeClass.getSimpleName();
@@ -242,6 +248,11 @@ public class CarbondataPageSource implements ConnectorPageSource {
     }
   }
 
+  /**
+   * Handling null values in shortint datatype
+   * @param shortData
+   * @return
+     */
   private short[] getShortData(Short[] shortData) {
     short[] data = new short[shortData.length];
     for (int i = 0; i < data.length; i++) {
@@ -251,6 +262,11 @@ public class CarbondataPageSource implements ConnectorPageSource {
     return data;
   }
 
+  /**
+   * Handling null values in int datatype
+   * @param intData
+   * @return
+     */
   private int[] getIntData(Integer[] intData) {
     int[] data = new int[intData.length];
     for (int i = 0; i < data.length; i++) {
@@ -260,6 +276,11 @@ public class CarbondataPageSource implements ConnectorPageSource {
     return data;
   }
 
+  /**
+   * Handling null values in long datatype
+   * @param longData
+   * @return
+     */
   private long[] getLongData(Long[] longData) {
     long[] data = new long[longData.length];
     for (int i = 0; i < data.length; i++) {
@@ -269,6 +290,11 @@ public class CarbondataPageSource implements ConnectorPageSource {
     return data;
   }
 
+  /**
+   * Converting long datatype to double
+   * @param doubleData
+   * @return
+     */
   private long[] getLongDataForDouble(Double[] doubleData) {
     long[] data = new long[doubleData.length];
     for (int i = 0; i < doubleData.length; i++) {
@@ -278,6 +304,11 @@ public class CarbondataPageSource implements ConnectorPageSource {
     return data;
   }
 
+  /**
+   * Converting decimal values to long
+   * @param data
+   * @return
+     */
   private long[] getLongDataForDecimal(BigDecimal[] data) {
     long[] longValues = new long[data.length];
     for (int i = 0; i < data.length; i++) {
@@ -287,6 +318,11 @@ public class CarbondataPageSource implements ConnectorPageSource {
     return longValues;
   }
 
+  /**
+   * Convert boolean object type to into presto boolean
+   * @param val
+     * @return
+     */
   private Slice[] getBooleanSlices(Object val) {
     Boolean[] data = (Boolean[]) val;
     Slice[] booleanSlices = new Slice[data.length];
@@ -296,6 +332,11 @@ public class CarbondataPageSource implements ConnectorPageSource {
     return booleanSlices;
   }
 
+  /**
+   * Convert string object type to presto slice
+   * @param val
+     * @return
+     */
   private Slice[] getStringSlices(Object val) {
     String[] data = (String[]) val;
     Slice[] stringSlices = new Slice[data.length];
@@ -305,6 +346,11 @@ public class CarbondataPageSource implements ConnectorPageSource {
     return stringSlices;
   }
 
+  /**
+   * Check for null values
+   * @param val
+     * @return
+     */
   private boolean[] checkNull(Object val) {
     Object[] arrData = (Object[]) val;
     boolean[] isNull = new boolean[arrData.length];
@@ -324,6 +370,14 @@ public class CarbondataPageSource implements ConnectorPageSource {
     cursor.close();
   }
 
+  /**
+   * Parsing decimal type to big decimal of presto
+   * @param type
+   * @param slice
+   * @param offset
+   * @param length
+     * @return
+     */
   private long parseLong(DecimalType type, Slice slice, int offset, int length) {
     BigDecimal decimal = parseBigDecimal(type, slice, offset, length);
     return decimal.unscaledValue().longValue();

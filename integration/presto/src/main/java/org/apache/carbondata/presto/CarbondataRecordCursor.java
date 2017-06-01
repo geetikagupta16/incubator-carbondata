@@ -187,6 +187,12 @@ public class CarbondataRecordCursor implements RecordCursor {
     return parseStructData(fieldValue, field);
   }
 
+  /**
+   * Creating schema consist of array of object from string
+   * @param fieldValue
+   * @param field
+     * @return
+     */
   private Object parseStructData(String fieldValue, int field) {
     String[] data =
         fieldValue.replaceAll("\\[", "").replaceAll("\\]", "").replaceAll("\\s", "").split(",");
@@ -200,6 +206,12 @@ public class CarbondataRecordCursor implements RecordCursor {
     return parsedData;
   }
 
+  /**
+   * Parsing element in struct to its primitive datatype
+   * @param elem
+   * @param elemType
+   * @return
+     */
   private Object getStructElement(String elem, Type elemType) {
     if (checkNullValue(elem))
       return null;
@@ -226,6 +238,11 @@ public class CarbondataRecordCursor implements RecordCursor {
     }
   }
 
+  /**
+   * Checking null values else parsing it to respective primitive type
+   * @param field
+     * @return
+     */
   private Object getData(int field) {
     String fieldValue = getFieldValue(field);
     String[] data =
@@ -280,6 +297,11 @@ public class CarbondataRecordCursor implements RecordCursor {
     }
   }
 
+  /**
+   * Checking for null values
+   * @param val
+     * @return
+     */
   private boolean checkNullValue(String val) {
     return val.equals("null");
   }
