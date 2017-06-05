@@ -37,6 +37,7 @@ import com.facebook.presto.spi.block.LongArrayBlock;
 import com.facebook.presto.spi.block.ShortArrayBlock;
 import com.facebook.presto.spi.block.SliceArrayBlock;
 import com.facebook.presto.spi.type.DecimalType;
+import com.facebook.presto.spi.type.Decimals;
 import com.facebook.presto.spi.type.Type;
 import io.airlift.slice.Slice;
 
@@ -112,8 +113,18 @@ public class CarbondataPageSource implements ConnectorPageSource {
             Type type = types.get(column);
             Class<?> javaType = type.getJavaType();
             String javaTypeName = javaType.getSimpleName();
-
-            switch (javaTypeName) {
+            String base = type.getTypeSignature().getBase();
+            switch (base) {
+              case "varchar":
+              case "decimal":
+                Slice slice = cursor.getSlice(column);
+                writeSlice(slice, type, output);
+                break;
+              case "row":
+              case "array":
+                Object val = cursor.getObject(column);
+                writeObject(val, output, type);
+                break;
               case "boolean":
                 type.writeBoolean(output, cursor.getBoolean(column));
                 break;
@@ -122,14 +133,6 @@ public class CarbondataPageSource implements ConnectorPageSource {
                 break;
               case "double":
                 type.writeDouble(output, cursor.getDouble(column));
-                break;
-              case "Block":
-                Object val = cursor.getObject(column);
-                writeObject(val, output, type);
-                break;
-              case "Slice":
-                Slice slice = cursor.getSlice(column);
-                writeSlice(slice, type, output);
                 break;
               default:
                 type.writeObject(output, cursor.getObject(column));
@@ -181,7 +184,7 @@ public class CarbondataPageSource implements ConnectorPageSource {
 
   private Block getArrayBlock(Type type, Object val, boolean[] isNull) {
 
-    switch (type.getTypeSignature().getBase()) {
+    switch (type.getTypeParameters().get(0).getTypeSignature().getBase()) {
       case "smallint":
       case "integer":
         int[] intArray = getIntData((Integer[]) val);
@@ -203,12 +206,24 @@ public class CarbondataPageSource implements ConnectorPageSource {
         Slice[] booleanSlices = getBooleanSlices(val);
         return new SliceArrayBlock(booleanSlices.length, booleanSlices);
       case "decimal":
-        long[] longDecimalValues = getLongDataForDecimal((BigDecimal[]) val);
-        return new LongArrayBlock(longDecimalValues.length, isNull, longDecimalValues);
+        Slice[] decimalSlices = getDecimalSlices((BigDecimal[]) val);
+        long[] bigDecimalLongValues = new long[decimalSlices.length];
+        for(int i=0;i <decimalSlices.length; i++) {
+          bigDecimalLongValues[i] = parseLong((DecimalType) type.getTypeParameters().get(0), decimalSlices[i], 0, decimalSlices[i].length());
+        }
+        return new LongArrayBlock(bigDecimalLongValues.length,
+            isNull, bigDecimalLongValues);
       default:
         return null;
     }
+  }
 
+  private Slice[] getDecimalSlices(BigDecimal[] decimals) {
+  Slice[] decimalSlices = new Slice[decimals.length];
+    for (int i=0;i <decimals.length; i++) {
+      decimalSlices[i] = utf8Slice(Decimals.toString(decimals[i].unscaledValue(), decimals[i].scale()));
+  }
+  return decimalSlices;
   }
 
   private Block getElementBlock(Type structElemType, Object data) {
@@ -272,9 +287,14 @@ public class CarbondataPageSource implements ConnectorPageSource {
           return new LongArrayBlock(doubleData.length, new boolean[] { checkNullElement(data) },
               getLongDataForDouble(doubleData));
         default:
-          BigDecimal[] longForDecimal = new BigDecimal[] { (BigDecimal) data };
-          return new LongArrayBlock(longForDecimal.length, new boolean[] { checkNullElement(data) },
-              getLongDataForDecimal(longForDecimal));
+          BigDecimal decimalData = (BigDecimal) data;
+          Slice decimalSlice =
+              utf8Slice(Decimals.toString(decimalData.unscaledValue(), decimalData.scale()));
+          long[] bigDecimalLongValues = new long[] {
+              parseLong((DecimalType) structElemType, decimalSlice, 0, decimalSlice.length()) };
+          return new LongArrayBlock(bigDecimalLongValues.length,
+              new boolean[] { checkNullElement(data) }, bigDecimalLongValues);
+
       }
     }
   }
