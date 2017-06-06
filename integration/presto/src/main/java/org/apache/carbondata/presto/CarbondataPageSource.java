@@ -111,8 +111,6 @@ public class CarbondataPageSource implements ConnectorPageSource {
             output.appendNull();
           } else {
             Type type = types.get(column);
-            Class<?> javaType = type.getJavaType();
-            String javaTypeName = javaType.getSimpleName();
             String base = type.getTypeSignature().getBase();
             switch (base) {
               case "varchar":
@@ -151,6 +149,13 @@ public class CarbondataPageSource implements ConnectorPageSource {
     return page;
   }
 
+  /**
+   * Writes a slice, used when datatype is varchar or decimal
+   *
+   * @param slice
+   * @param type
+   * @param output
+   */
   private void writeSlice(Slice slice, Type type, BlockBuilder output) {
     if (type instanceof DecimalType) {
       if (isShortDecimal(type)) {
@@ -163,6 +168,13 @@ public class CarbondataPageSource implements ConnectorPageSource {
     }
   }
 
+  /**
+   * Writes an object, used when datatype is array or struct
+   *
+   * @param val
+   * @param output
+   * @param type
+   */
   private void writeObject(Object val, BlockBuilder output, Type type) {
     boolean[] isNull = checkNull(val);
 
@@ -171,21 +183,32 @@ public class CarbondataPageSource implements ConnectorPageSource {
       List<Type> structElemTypes = type.getTypeParameters();
       Block[] dataBlock = new Block[structElemTypes.size()];
       for (int i = 0; i < structElemTypes.size(); i++) {
-        dataBlock[i] = getElementBlock(structElemTypes.get(i), data[i]);
+        dataBlock[i] = getElementBlockForStruct(structElemTypes.get(i), data[i]);
       }
 
       type.writeObject(output, new InterleavedBlock(dataBlock));
 
     } else {
-      Block arrayBlock = getArrayBlock(type, val, isNull);
+      Type elemType = type.getTypeParameters().get(0);
+      Block arrayBlock = getElementBlock(elemType, val, isNull);
       type.writeObject(output, arrayBlock);
     }
   }
 
-  private Block getArrayBlock(Type type, Object val, boolean[] isNull) {
-
-    switch (type.getTypeParameters().get(0).getTypeSignature().getBase()) {
+  /**
+   * Returns a block for an element
+   *
+   * @param type
+   * @param val
+   * @param isNull
+   * @return
+   */
+  private Block getElementBlock(Type type, Object val, boolean[] isNull) {
+    String elemTypeBase = type.getTypeSignature().getBase();
+    switch (elemTypeBase) {
       case "smallint":
+        short[] shortData = getShortData((Short[]) val);
+        return new ShortArrayBlock(shortData.length, isNull, shortData);
       case "integer":
         int[] intArray = getIntData((Integer[]) val);
         return new IntArrayBlock(intArray.length, isNull, intArray);
@@ -208,25 +231,48 @@ public class CarbondataPageSource implements ConnectorPageSource {
       case "decimal":
         Slice[] decimalSlices = getDecimalSlices((BigDecimal[]) val);
         long[] bigDecimalLongValues = new long[decimalSlices.length];
-        for(int i=0;i <decimalSlices.length; i++) {
-          bigDecimalLongValues[i] = parseLong((DecimalType) type.getTypeParameters().get(0), decimalSlices[i], 0, decimalSlices[i].length());
+        for (int i = 0; i < decimalSlices.length; i++) {
+          if (checkNullElement(decimalSlices[i])) {
+            bigDecimalLongValues[i] = 0L;
+          } else {
+            bigDecimalLongValues[i] =
+                parseLong((DecimalType) type.getTypeParameters().get(0), decimalSlices[i], 0,
+                    decimalSlices[i].length());
+          }
         }
-        return new LongArrayBlock(bigDecimalLongValues.length,
-            isNull, bigDecimalLongValues);
+        return new LongArrayBlock(bigDecimalLongValues.length, isNull, bigDecimalLongValues);
       default:
         return null;
     }
   }
 
+  /**
+   * Returns slices for bigdecimal values
+   *
+   * @param decimals
+   * @return
+   */
   private Slice[] getDecimalSlices(BigDecimal[] decimals) {
-  Slice[] decimalSlices = new Slice[decimals.length];
-    for (int i=0;i <decimals.length; i++) {
-      decimalSlices[i] = utf8Slice(Decimals.toString(decimals[i].unscaledValue(), decimals[i].scale()));
-  }
-  return decimalSlices;
+    Slice[] decimalSlices = new Slice[decimals.length];
+    for (int i = 0; i < decimals.length; i++) {
+      if (checkNullElement(decimals[i])) {
+        decimalSlices[i] = null;
+      } else {
+        decimalSlices[i] =
+            utf8Slice(Decimals.toString(decimals[i].unscaledValue(), decimals[i].scale()));
+      }
+    }
+    return decimalSlices;
   }
 
-  private Block getElementBlock(Type structElemType, Object data) {
+  /**
+   * Returns block for Structure elements
+   *
+   * @param structElemType
+   * @param data
+   * @return
+   */
+  private Block getElementBlockForStruct(Type structElemType, Object data) {
     //Check for row inside a rowtype
     if (structElemType.getTypeSignature().getBase().equals("row")) {
       int nStructElements = structElemType.getTypeParameters().size();
@@ -234,7 +280,7 @@ public class CarbondataPageSource implements ConnectorPageSource {
       Object[] structElements = (Object[]) data;
       for (int i = 0; i < nStructElements; i++) {
         structBlocks[i] =
-            getElementBlock(structElemType.getTypeParameters().get(i), structElements[i]);
+            getElementBlockForStruct(structElemType.getTypeParameters().get(i), structElements[i]);
       }
       int blockSize = structBlocks[0].getPositionCount();
       int[] offsets = new int[blockSize + 1];
@@ -250,7 +296,7 @@ public class CarbondataPageSource implements ConnectorPageSource {
       Object[] structElements = (Object[]) data;
       Type arrayElemType = structElemType.getTypeParameters().get(0);
       boolean[] isNull = checkNull(structElements);
-      Block arrayBlock = getArrayBlock(arrayElemType, structElements, isNull);
+      Block arrayBlock = getElementBlock(arrayElemType, structElements, isNull);
       int[] offsets = new int[arrayBlock.getPositionCount() + 1];
       for (int i = 1; i < offsets.length; i++) {
         offsets[i] = i * structElements.length;
@@ -260,42 +306,9 @@ public class CarbondataPageSource implements ConnectorPageSource {
     } else {
 
       //Handling of primitive types inside a rowtype
-      switch (structElemType.getDisplayName()) {
-        case "integer":
-          Integer[] intData = new Integer[] { (Integer) data };
-          return new IntArrayBlock(intData.length, new boolean[] { checkNullElement(data) },
-              getIntData(intData));
-        case "smallint":
-          Short[] shortData = new Short[] { (Short) data };
-          return new ShortArrayBlock(shortData.length, new boolean[] { checkNullElement(data) },
-              getShortData(shortData));
-        case "varchar":
-          Slice slice = utf8Slice((String) data);
-          return new SliceArrayBlock(1, new Slice[] { slice });
-        case "timestamp":
-        case "bigint":
-        case "long":
-          Long[] longValue = new Long[] { (Long) data };
-          return new LongArrayBlock(longValue.length, new boolean[] { checkNullElement(data) },
-              getLongData(longValue));
-        case "boolean":
-          Slice booleanData = utf8Slice(Boolean.toString((Boolean) data));
-          return new SliceArrayBlock(1, new Slice[] { booleanData });
-        case "float":
-        case "double":
-          Double[] doubleData = new Double[] { (Double) data };
-          return new LongArrayBlock(doubleData.length, new boolean[] { checkNullElement(data) },
-              getLongDataForDouble(doubleData));
-        default:
-          BigDecimal decimalData = (BigDecimal) data;
-          Slice decimalSlice =
-              utf8Slice(Decimals.toString(decimalData.unscaledValue(), decimalData.scale()));
-          long[] bigDecimalLongValues = new long[] {
-              parseLong((DecimalType) structElemType, decimalSlice, 0, decimalSlice.length()) };
-          return new LongArrayBlock(bigDecimalLongValues.length,
-              new boolean[] { checkNullElement(data) }, bigDecimalLongValues);
+      boolean[] isNull = checkNull(data);
+      return getElementBlock(structElemType, data, isNull);
 
-      }
     }
   }
 
@@ -333,15 +346,6 @@ public class CarbondataPageSource implements ConnectorPageSource {
       data[i] = Objects.isNull(doubleData[i]) ? 0L : Double.doubleToLongBits(doubleData[i]);
     }
     return data;
-  }
-
-  private long[] getLongDataForDecimal(BigDecimal[] data) {
-    long[] longValues = new long[data.length];
-    for (int i = 0; i < data.length; i++) {
-      // insert some dummy data for null values in decimal column
-      longValues[i] = Objects.isNull(data[i]) ? 0L : data[i].longValue();
-    }
-    return longValues;
   }
 
   private Slice[] getBooleanSlices(Object val) {

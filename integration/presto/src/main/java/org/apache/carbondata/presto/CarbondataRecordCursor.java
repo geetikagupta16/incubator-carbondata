@@ -177,13 +177,19 @@ public class CarbondataRecordCursor implements RecordCursor {
 
   @Override public Object getObject(int field) {
     if (columnHandles.get(field).getColumnType().getTypeSignature().getBase().equals("array")) {
-      Object arrValues = getData(field);
+      Object arrValues = getArrayData(field);
       return arrValues;
     } else {
       return parseStructData(field);
     }
   }
 
+  /**
+   * Parses the structure data according to its element types
+   *
+   * @param field
+   * @return
+   */
   private Object parseStructData(int field) {
 
     List<Type> elemTypes = columnHandles.get(field).getColumnType().getTypeParameters();
@@ -205,13 +211,15 @@ public class CarbondataRecordCursor implements RecordCursor {
           }
           parsedData[i] = nestedStructElements;
           break;
+
         case "array":
           GenericInternalRow complexArrayData = (GenericInternalRow) columnData[field];
           String complexNestedArrayData =
               Arrays.deepToString(complexArrayData.getArray(field).array());
           String[] arrayElements =
               complexNestedArrayData.replaceAll("\\[", "").replaceAll("\\]", "").split(", ");
-          parsedData[i] = getArrayData(elemTypes.get(i).getTypeParameters().get(0), arrayElements);
+          parsedData[i] =
+              getArrayElements(elemTypes.get(i).getTypeParameters().get(0), arrayElements);
           break;
 
         default:
@@ -224,34 +232,46 @@ public class CarbondataRecordCursor implements RecordCursor {
     return parsedData;
   }
 
+  /**
+   * Returns the element of the structure
+   *
+   * @param elem
+   * @param elemType
+   * @return
+   */
   private Object getStructElement(String elem, Type elemType) {
     if (checkNullValue(elem)) return null;
     else {
       String elementType = elemType.getDisplayName();
-      if (elementType.equals("integer")) return Integer.parseInt(elem);
-      else if (elementType.equals("boolean")) return Boolean.parseBoolean(elem);
+      if (elementType.equals("integer")) return new Integer[] { Integer.parseInt(elem) };
+      else if (elementType.equals("boolean")) return new Boolean[] { Boolean.parseBoolean(elem) };
       else if (elementType.equals("bigint") || elementType.equals("long"))
-        return Long.parseLong(elem);
-      else if (elementType.equals("double")) return Double.parseDouble(elem);
-      else if (elementType.equals("float")) return Float.parseFloat(elem);
-      else if (elementType.contains("decimal")) return new BigDecimal(elem);
+        return new Long[] { Long.parseLong(elem) };
+      else if (elementType.equals("double")) return new Double[] { Double.parseDouble(elem) };
+      else if (elementType.equals("float")) return new Float[] { Float.parseFloat(elem) };
+      else if (elementType.contains("decimal")) return new BigDecimal[] { new BigDecimal(elem) };
       else if (elementType.equals("timestamp"))
-        return new Timestamp(Long.parseLong(elem)).getTime() / 1000;
-      else if (elementType.equals("smallint")) return Short.parseShort(elem);
-      else return elem;
+        return new Long[] { new Timestamp(Long.parseLong(elem)).getTime() / 1000 };
+      else if (elementType.equals("smallint")) return new Short[] { Short.parseShort(elem) };
+      else return new String[] { elem };
     }
   }
 
-  private Object getData(int field) {
+  /**
+   * Returns elements of an array
+   *
+   * @param field
+   * @return
+   */
+  private Object getArrayData(int field) {
     String fieldValue = getFieldValue(field);
     String[] data = fieldValue.replaceAll("\\[", "").replaceAll("\\]", "").split(",");
 
-    //For array datatype
     Type arrDataType = columnHandles.get(field).getColumnType().getTypeParameters().get(0);
-    return getArrayData(arrDataType, data);
+    return getArrayElements(arrDataType, data);
   }
 
-  private Object getArrayData(Type arrDataType, String[] data) {
+  private Object getArrayElements(Type arrDataType, String[] data) {
 
     switch (arrDataType.getTypeSignature().getBase()) {
       case "boolean":
