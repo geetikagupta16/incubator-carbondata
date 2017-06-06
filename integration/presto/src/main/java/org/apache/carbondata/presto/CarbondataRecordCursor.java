@@ -36,6 +36,7 @@ import com.google.common.base.Strings;
 import io.airlift.log.Logger;
 import io.airlift.slice.Slice;
 import org.apache.spark.sql.catalyst.expressions.GenericInternalRow;
+import org.apache.spark.sql.catalyst.util.GenericArrayData;
 
 import static com.facebook.presto.spi.type.BooleanType.BOOLEAN;
 import static com.facebook.presto.spi.type.Decimals.isShortDecimal;
@@ -264,11 +265,29 @@ public class CarbondataRecordCursor implements RecordCursor {
    * @return
    */
   private Object getArrayData(int field) {
-    String fieldValue = getFieldValue(field);
-    String[] data = fieldValue.replaceAll("\\[", "").replaceAll("\\]", "").split(",");
 
-    Type arrDataType = columnHandles.get(field).getColumnType().getTypeParameters().get(0);
-    return getArrayElements(arrDataType, data);
+    Type arrayDataType = columnHandles.get(field).getColumnType().getTypeParameters().get(0);
+    if (arrayDataType.getTypeSignature().getBase().equals("array")) {
+      GenericArrayData arrayData = (GenericArrayData) columnData[field];
+      Object[] rowElements = arrayData.array();
+      for (int i = 0; i < rowElements.length; i++) {
+        GenericArrayData y = (GenericArrayData) rowElements[i];
+        Object[] arrayElements = y.array();
+        String[] rowData =
+            Arrays.deepToString(arrayElements).replaceAll("\\[", "").replaceAll("\\]", "")
+                .split(", ");
+        Type nestedElemType =
+            columnHandles.get(field).getColumnType().getTypeParameters().get(0).getTypeParameters()
+                .get(0);
+        rowElements[i] = getArrayElements(nestedElemType, rowData);
+      }
+      return rowElements;
+    } else {
+      String fieldValue = getFieldValue(field);
+      String[] data = fieldValue.replaceAll("\\[", "").replaceAll("\\]", "").split(",");
+      Type arrDataType = columnHandles.get(field).getColumnType().getTypeParameters().get(0);
+      return getArrayElements(arrDataType, data);
+    }
   }
 
   private Object getArrayElements(Type arrDataType, String[] data) {

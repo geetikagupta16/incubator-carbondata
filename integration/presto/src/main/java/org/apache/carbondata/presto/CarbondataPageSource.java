@@ -194,9 +194,27 @@ public class CarbondataPageSource implements ConnectorPageSource {
       type.writeObject(output, new InterleavedBlock(dataBlock));
 
     } else {
-      Type elemType = type.getTypeParameters().get(0);
-      Block arrayBlock = getElementBlock(elemType, val, isNull);
-      type.writeObject(output, arrayBlock);
+      Object[] data = (Object[]) val;
+
+      if (type.getTypeParameters().get(0).getTypeSignature().getBase().equals("array")) {
+        Block[] elemBlocks = new Block[data.length];
+        Type arrayElemType = type.getTypeParameters().get(0).getTypeParameters().get(0);
+
+        for (int i = 0; i < data.length; i++) {
+          Block arrayBlock = getElementBlock(arrayElemType, data[i], checkNull(data[i]));
+          int[] offsets = new int[arrayBlock.getPositionCount() + 1];
+          for (int j = 1; j < offsets.length; j++) {
+            offsets[j] = j * arrayBlock.getPositionCount();
+          }
+          elemBlocks[i] = new ArrayBlock(1, checkNull(data[i]), offsets, arrayBlock);
+        }
+        type.writeObject(output, new InterleavedBlock(elemBlocks));
+
+      } else {
+        Type elemType = type.getTypeParameters().get(0);
+        Block arrayBlock = getElementBlock(elemType, val, isNull);
+        type.writeObject(output, arrayBlock);
+      }
     }
   }
 
