@@ -126,7 +126,12 @@ public class CarbondataPageSource implements ConnectorPageSource {
               case "boolean":
                 type.writeBoolean(output, cursor.getBoolean(column));
                 break;
+              case "smallint":
+              case "integer":
+              case "bigint":
               case "long":
+              case "date":
+              case "timestamp":
                 type.writeLong(output, cursor.getLong(column));
                 break;
               case "double":
