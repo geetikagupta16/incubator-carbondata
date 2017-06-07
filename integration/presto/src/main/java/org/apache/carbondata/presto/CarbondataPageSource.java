@@ -336,6 +336,9 @@ public class CarbondataPageSource implements ConnectorPageSource {
   }
 
   private short[] getShortData(Short[] shortData) {
+    if (checkNullElement(shortData)) {
+      return new short[] { 0 };
+    }
     short[] data = new short[shortData.length];
     for (int i = 0; i < data.length; i++) {
       // insert some dummy data for null values in int column
@@ -345,15 +348,22 @@ public class CarbondataPageSource implements ConnectorPageSource {
   }
 
   private int[] getIntData(Integer[] intData) {
-    int[] data = new int[intData.length];
-    for (int i = 0; i < data.length; i++) {
-      // insert some dummy data for null values in int column
-      data[i] = Objects.isNull(intData[i]) ? 0 : intData[i];
+    if (checkNullElement(intData)) {
+      return new int[] { 0 };
+    } else {
+      int[] data = new int[intData.length];
+      for (int i = 0; i < data.length; i++) {
+        // insert some dummy data for null values in int column
+        data[i] = Objects.isNull(intData[i]) ? 0 : intData[i];
+      }
+      return data;
     }
-    return data;
   }
 
   private long[] getLongData(Long[] longData) {
+    if (checkNullElement(longData)) {
+      return new long[] { 0L };
+    }
     long[] data = new long[longData.length];
     for (int i = 0; i < data.length; i++) {
       // insert some dummy data for null values in long column
@@ -363,6 +373,9 @@ public class CarbondataPageSource implements ConnectorPageSource {
   }
 
   private long[] getLongDataForDouble(Double[] doubleData) {
+    if (checkNullElement(doubleData)) {
+      return new long[] { 0L };
+    }
     long[] data = new long[doubleData.length];
     for (int i = 0; i < doubleData.length; i++) {
       //insert dummy data for null values in double column
@@ -373,6 +386,10 @@ public class CarbondataPageSource implements ConnectorPageSource {
 
   private Slice[] getBooleanSlices(Object val) {
     Boolean[] data = (Boolean[]) val;
+
+    if (checkNullElement(val)) {
+      return new Slice[] { utf8Slice("null") };
+    }
     Slice[] booleanSlices = new Slice[data.length];
     for (int i = 0; i < data.length; i++) {
       booleanSlices[i] = utf8Slice(Boolean.toString(data[i]));
@@ -382,6 +399,9 @@ public class CarbondataPageSource implements ConnectorPageSource {
 
   private Slice[] getStringSlices(Object val) {
     String[] data = (String[]) val;
+    if (checkNullElement(val)) {
+      return new Slice[] { utf8Slice("null") };
+    }
     Slice[] stringSlices = new Slice[data.length];
     for (int i = 0; i < data.length; i++) {
       stringSlices[i] = utf8Slice(data[i]);
@@ -391,12 +411,16 @@ public class CarbondataPageSource implements ConnectorPageSource {
 
   private boolean[] checkNull(Object val) {
     Object[] arrData = (Object[]) val;
-    boolean[] isNull = new boolean[arrData.length];
-    int i;
-    for (i = 0; i < arrData.length; i++) {
-      isNull[i] = checkNullElement(arrData[i]);
+    if (checkNullElement(val)) {
+      return new boolean[] { true };
+    } else {
+      boolean[] isNull = new boolean[arrData.length];
+      int i;
+      for (i = 0; i < arrData.length; i++) {
+        isNull[i] = checkNullElement(arrData[i]);
+      }
+      return isNull;
     }
-    return isNull;
   }
 
   private boolean checkNullElement(Object val) {
