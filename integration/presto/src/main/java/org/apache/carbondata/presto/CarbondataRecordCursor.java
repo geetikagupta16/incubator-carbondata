@@ -17,16 +17,6 @@
 
 package org.apache.carbondata.presto;
 
-import java.math.BigDecimal;
-import java.math.BigInteger;
-import java.sql.Timestamp;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-
-import org.apache.carbondata.common.CarbonIterator;
-import org.apache.carbondata.hadoop.readsupport.CarbonReadSupport;
-
 import com.facebook.presto.spi.RecordCursor;
 import com.facebook.presto.spi.type.DecimalType;
 import com.facebook.presto.spi.type.Decimals;
@@ -35,8 +25,17 @@ import com.facebook.presto.spi.type.Type;
 import com.google.common.base.Strings;
 import io.airlift.log.Logger;
 import io.airlift.slice.Slice;
+import org.apache.carbondata.common.CarbonIterator;
+import org.apache.carbondata.hadoop.readsupport.CarbonReadSupport;
 import org.apache.spark.sql.catalyst.expressions.GenericInternalRow;
 import org.apache.spark.sql.catalyst.util.GenericArrayData;
+
+import java.math.BigDecimal;
+import java.math.BigInteger;
+import java.sql.Timestamp;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 
 import static com.facebook.presto.spi.type.BooleanType.BOOLEAN;
 import static com.facebook.presto.spi.type.Decimals.isShortDecimal;
@@ -266,29 +265,47 @@ public class CarbondataRecordCursor implements RecordCursor {
    */
   private Object getArrayData(int field) {
 
-    Type arrayDataType = columnHandles.get(field).getColumnType().getTypeParameters().get(0);
-    if (arrayDataType.getTypeSignature().getBase().equals("array")) {
-      GenericArrayData arrayData = (GenericArrayData) columnData[field];
-      Object[] rowElements = arrayData.array();
-      for (int i = 0; i < rowElements.length; i++) {
-        GenericArrayData y = (GenericArrayData) rowElements[i];
-        Object[] arrayElements = y.array();
-        String[] rowData =
-            Arrays.deepToString(arrayElements).replaceAll("\\[", "").replaceAll("\\]", "")
-                .split(", ");
-        Type nestedElemType =
-            columnHandles.get(field).getColumnType().getTypeParameters().get(0).getTypeParameters()
-                .get(0);
-        rowElements[i] = getArrayElements(nestedElemType, rowData);
-      }
-      return rowElements;
-    } else {
-      String fieldValue = getFieldValue(field);
-      String[] data = fieldValue.replaceAll("\\[", "").replaceAll("\\]", "").split(",");
-      Type arrDataType = columnHandles.get(field).getColumnType().getTypeParameters().get(0);
-      return getArrayElements(arrDataType, data);
+        Type arrayDataType = columnHandles.get(field).getColumnType().getTypeParameters().get(0);
+        if (arrayDataType.getTypeSignature().getBase().equals("array")) {
+            GenericArrayData arrayData = (GenericArrayData) columnData[field];
+            Object[] rowElements = arrayData.array();
+            for (int i = 0; i < rowElements.length; i++) {
+                GenericArrayData y = (GenericArrayData) rowElements[i];
+                Object[] arrayElements = y.array();
+                String[] rowData =
+                        Arrays.deepToString(arrayElements).replaceAll("\\[", "").replaceAll("\\]", "")
+                                .split(", ");
+                Type nestedElemType =
+                        columnHandles.get(field).getColumnType().getTypeParameters().get(0).getTypeParameters()
+                                .get(0);
+                rowElements[i] = getArrayElements(nestedElemType, rowData);
+            }
+            return rowElements;
+        } else if (arrayDataType.getTypeSignature().getBase().equals("row")) {
+            GenericArrayData arrayData = (GenericArrayData) columnData[field];
+            Object rows[] = arrayData.array();
+            Object[] arrayElements = new Object[rows.length];
+            for (int i = 0; i < rows.length; i++) {
+                GenericInternalRow row = (GenericInternalRow) rows[i];
+                String[] rowData = Arrays.deepToString(row.values()).replaceAll("\\[", "").replaceAll("\\]", "")
+                        .split(", ");
+
+                Object[] structData = new Object[rowData.length];
+                List<Type> nestedStructElemTypes = arrayDataType.getTypeParameters();
+                for (int j = 0; j < rowData.length; j++) {
+
+                    structData[j] = getStructElement(rowData[j], nestedStructElemTypes.get(j));
+                }
+                arrayElements[i] = structData;
+            }
+            return arrayElements;
+        } else {
+            String fieldValue = getFieldValue(field);
+            String[] data = fieldValue.replaceAll("\\[", "").replaceAll("\\]", "").split(",");
+            Type arrDataType = columnHandles.get(field).getColumnType().getTypeParameters().get(0);
+            return getArrayElements(arrDataType, data);
+        }
     }
-  }
 
   private Object getArrayElements(Type arrDataType, String[] data) {
 
