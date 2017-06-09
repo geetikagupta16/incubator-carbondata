@@ -17,18 +17,29 @@
 
 package org.apache.carbondata.presto;
 
-import com.facebook.presto.spi.*;
-import com.facebook.presto.spi.block.*;
-import com.facebook.presto.spi.type.DecimalType;
-import com.facebook.presto.spi.type.Decimals;
-import com.facebook.presto.spi.type.Type;
-import io.airlift.slice.Slice;
-
 import java.io.IOException;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+
+import com.facebook.presto.spi.ConnectorPageSource;
+import com.facebook.presto.spi.Page;
+import com.facebook.presto.spi.PageBuilder;
+import com.facebook.presto.spi.RecordCursor;
+import com.facebook.presto.spi.RecordSet;
+import com.facebook.presto.spi.block.ArrayBlock;
+import com.facebook.presto.spi.block.Block;
+import com.facebook.presto.spi.block.BlockBuilder;
+import com.facebook.presto.spi.block.IntArrayBlock;
+import com.facebook.presto.spi.block.InterleavedBlock;
+import com.facebook.presto.spi.block.LongArrayBlock;
+import com.facebook.presto.spi.block.ShortArrayBlock;
+import com.facebook.presto.spi.block.SliceArrayBlock;
+import com.facebook.presto.spi.type.DecimalType;
+import com.facebook.presto.spi.type.Decimals;
+import com.facebook.presto.spi.type.Type;
+import io.airlift.slice.Slice;
 
 import static com.facebook.presto.spi.type.Decimals.encodeUnscaledValue;
 import static com.facebook.presto.spi.type.Decimals.isShortDecimal;
@@ -182,49 +193,58 @@ public class CarbondataPageSource implements ConnectorPageSource {
 
       type.writeObject(output, new InterleavedBlock(dataBlock));
 
-        } else {
-            Object[] data = (Object[]) val;
-            Type arrayElemType = type.getTypeParameters().get(0);
+    } else {
+      Object[] data = (Object[]) val;
+      Type arrayElemType = type.getTypeParameters().get(0);
 
-            if (arrayElemType.getTypeSignature().getBase().equals("array")) {
-                Block[] elemBlocks = new Block[data.length];
-                Type arrayNestedElemType = arrayElemType.getTypeParameters().get(0);
+      if (arrayElemType.getTypeSignature().getBase().equals("array")) {
+        Block[] elemBlocks = new Block[data.length];
+        Type arrayNestedElemType = arrayElemType.getTypeParameters().get(0);
 
-                for (int i = 0; i < data.length; i++) {
-                    Block arrayBlock = getElementBlock(arrayNestedElemType, data[i], checkNull(data[i]));
-                    int[] offsets = new int[arrayBlock.getPositionCount() + 1];
-                    for (int j = 1; j < offsets.length; j++) {
-                        offsets[j] = j * arrayBlock.getPositionCount();
-                    }
-                    elemBlocks[i] = new ArrayBlock(1, checkNull(data[i]), offsets, arrayBlock);
-                }
-                type.writeObject(output, new InterleavedBlock(elemBlocks));
-
-            } else if (arrayElemType.getTypeSignature().getBase().equals("row")) {
-                Block[] elemBlocks = new Block[data.length];
-                List<Type> arrayNestedElemType = arrayElemType.getTypeParameters();
-
-                for (int i = 0; i < data.length; i++) {
-                    Block[] dataBlock = new Block[arrayNestedElemType.size()];
-                    Object[] arrData = (Object[]) data[i];
-                    for (int j = 0; j < arrayNestedElemType.size(); j++) {
-                        dataBlock[j] = getElementBlockForStruct(arrayNestedElemType.get(j), arrData[j]);
-                    }
-                    elemBlocks[i] = new InterleavedBlock(dataBlock);
-                }
-                int offsets[]=new int[elemBlocks.length+1];
-                for(int j=1;j<offsets.length; j++) {
-                    offsets[j] = j * arrayNestedElemType.size();
-                }
-                type.writeObject(output, new ArrayBlock(elemBlocks.length, checkNull(elemBlocks), offsets, new InterleavedBlock(elemBlocks)));
-
-            } else {
-                Type elemType = type.getTypeParameters().get(0);
-                Block arrayBlock = getElementBlock(elemType, val, isNull);
-                type.writeObject(output, arrayBlock);
-            }
+        for (int i = 0; i < data.length; i++) {
+          Block arrayBlock = getElementBlock(arrayNestedElemType, data[i], checkNull(data[i]));
+          int[] offsets = new int[arrayBlock.getPositionCount() + 1];
+          for (int j = 1; j < offsets.length; j++) {
+            offsets[j] = j * arrayBlock.getPositionCount();
+          }
+          elemBlocks[i] = new ArrayBlock(1, checkNull(data[i]), offsets, arrayBlock);
         }
+        type.writeObject(output, new InterleavedBlock(elemBlocks));
+
+      } else if (arrayElemType.getTypeSignature().getBase().equals("row")) {
+        Block[] elemBlocks = new Block[data.length];
+        List<Type> arrayNestedElemType = arrayElemType.getTypeParameters();
+
+        for (int i = 0; i < data.length; i++) {
+          Block[] dataBlock = new Block[arrayNestedElemType.size()];
+          Object[] arrData = (Object[]) data[i];
+          for (int j = 0; j < arrayNestedElemType.size(); j++) {
+            dataBlock[j] = getElementBlockForStruct(arrayNestedElemType.get(j), arrData[j]);
+          }
+
+          //finding offsets for inner elements
+          int[] nestedOffsets = new int[dataBlock.length + 1];
+          for (int k = 1; k < nestedOffsets.length; k++) {
+            nestedOffsets[k] = k * dataBlock[k-1].getPositionCount();
+          }
+          elemBlocks[i] = new ArrayBlock(dataBlock.length, checkNull(dataBlock), nestedOffsets,
+              new InterleavedBlock(dataBlock));
+        }
+        int offsets[] = new int[elemBlocks.length + 1];
+        for (int j = 1; j < offsets.length; j++) {
+          offsets[j] = j * arrayNestedElemType.size();
+        }
+       /* type.writeObject(output, new ArrayBlock(elemBlocks.length, checkNull(elemBlocks), offsets,
+            new InterleavedBlock(elemBlocks)));*/
+       type.writeObject(output, new InterleavedBlock(elemBlocks));
+
+      } else {
+        Type elemType = type.getTypeParameters().get(0);
+        Block arrayBlock = getElementBlock(elemType, val, isNull);
+        type.writeObject(output, arrayBlock);
+      }
     }
+  }
 
   /**
    * Returns a block for an element
