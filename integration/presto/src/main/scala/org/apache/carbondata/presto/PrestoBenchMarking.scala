@@ -18,7 +18,7 @@
 package org.apache.carbondata.presto
 
 import java.io.File
-import java.sql.{Connection, DriverManager, SQLException, Statement}
+import java.sql.{Connection, DriverManager, ResultSet, SQLException, Statement}
 import java.util
 import java.util.{Calendar, Locale, Optional}
 
@@ -34,10 +34,10 @@ import org.slf4j.{Logger, LoggerFactory}
 
 object PrestoBenchMarking {
   val rootPath: String = new File(this.getClass.getResource("/").getPath
-    + "../../../..").getCanonicalPath
+                                  + "../../../..").getCanonicalPath
   val CARBONDATA_CATALOG = "carbondata"
   val CARBONDATA_CONNECTOR = "carbondata"
-  val CARBONDATA_STOREPATH = s"$rootPath/integration/presto/data/parquet/store"
+  val CARBONDATA_STOREPATH = s"$rootPath/integration/presto/test/store"
   val CARBONDATA_SOURCE = "carbondata"
 
   // Instantiates the Presto Server to connect with the Apache CarbonData
@@ -60,13 +60,15 @@ object PrestoBenchMarking {
   }
 
   // CreateSession will create a new session in the Server to connect and execute queries.
-  def createSession: Session = Session.builder(new SessionPropertyManager)
-    .setQueryId(new QueryIdGenerator().createNextQueryId)
-    .setIdentity(new Identity("user", Optional.empty()))
-    .setSource(CARBONDATA_SOURCE).setCatalog(CARBONDATA_CATALOG)
-    .setTimeZoneKey(UTC_KEY).setLocale(Locale.ENGLISH)
-    .setRemoteUserAddress("address")
-    .setUserAgent("agent").build
+  def createSession: Session = {
+    Session.builder(new SessionPropertyManager)
+      .setQueryId(new QueryIdGenerator().createNextQueryId)
+      .setIdentity(new Identity("user", Optional.empty()))
+      .setSource(CARBONDATA_SOURCE).setCatalog(CARBONDATA_CATALOG)
+      .setTimeZoneKey(UTC_KEY).setLocale(Locale.ENGLISH)
+      .setRemoteUserAddress("address")
+      .setUserAgent("agent").build
+  }
 
   // Creates a JDBC Client to connect CarbonData to Presto
   @throws[Exception]
@@ -76,8 +78,7 @@ object PrestoBenchMarking {
     val queryRunner: DistributedQueryRunner = createQueryRunner(
       ImmutableMap.of("http-server.http.port", "8086"))
     Thread.sleep(10)
-    logger.info("========STARTED SERVER ========")
-    logger.info("\n====\n%s\n====", queryRunner.getCoordinator.getBaseUrl)
+    logger.info("STARTED SERVER AT :" + queryRunner.getCoordinator.getBaseUrl)
 
     // Step 1: Create Connection Strings
     val JDBC_DRIVER = "com.facebook.presto.jdbc.PrestoDriver"
@@ -87,8 +88,8 @@ object PrestoBenchMarking {
     val USER = "username"
     val PASS = "password"
     try {
-      logger.info("=============Connecting to database/table " +
-        ": default/comparetest_carbonV3 ===============")
+      logger.info("=============Connecting to database/table" +
+                  "===============")
       // STEP 2: Register JDBC driver
       Class.forName(JDBC_DRIVER)
       // STEP 3: Open a connection
@@ -97,8 +98,14 @@ object PrestoBenchMarking {
       val tableName = "comparetest_carbonV3"
 
       val executionTime: Array[Double] = BenchMarkingUtil.queries.map { queries =>
-        val query = queries.sqlText.replace("$table", tableName)
-        BenchMarkingUtil.time(stmt.executeQuery(query))
+     /*   // val query = queries.sqlText.replace("$table", tableName)
+        val time = BenchMarkingUtil.time(stmt.executeQuery(queries.sqlText))
+        println("\nSuccessfully Executed the Query : " + queries.sqlText + "\n")
+        time*/
+        val res: ResultSet =stmt.executeQuery(queries.sqlText)
+        res.last()
+        println("\nSuccessfully Executed the Query : " + queries.sqlText + "\n and result size is :" + res.getRow() + "\n")
+        0.01
       }
       conn.close()
       Some(executionTime)
@@ -134,27 +141,27 @@ object PrestoBenchMarking {
       }
     }
 
-    val parquetResults: List[String] = util.readFromFile(parquetFile)
-    val prestoResults: List[String] = util.readFromFile(prestoFile)
-    val orcResults: List[String] = util.readFromFile(orcFile)
-    val aggResults: List[(String, String, String)] =
-      (parquetResults, orcResults, prestoResults).zipped.toList
+    /* val parquetResults: List[String] = util.readFromFile(parquetFile)
+     val prestoResults: List[String] = util.readFromFile(prestoFile)
+     val orcResults: List[String] = util.readFromFile(orcFile)
+     val aggResults: List[(String, String, String)] =
+       (parquetResults, orcResults, prestoResults).zipped.toList
 
-    util.writeResults("\n\n-------------------------DATE/TIME:"
-      + Calendar.getInstance().getTime() +
-      " -----------------------------\n\n", compareFile)
+     util.writeResults("\n\n-------------------------DATE/TIME:"
+       + Calendar.getInstance().getTime() +
+       " -----------------------------\n\n", compareFile)
 
-    (BenchMarkingUtil.queries, aggResults).zipped.foreach { (query, results) =>
-      val (parquetTime, orcTime, prestoTime) = results
-      val resultContent: String = "|QUERY : " + query.sqlText + "\n" +
-        "|\t\t\tPARQUET EXECUTION TIME :" + parquetTime + "\n" +
-        "|\t\t\tORC EXECUTION TIME :" + orcTime + "\n" +
-        "|\t\t\tCARBONDATA EXECUTION TIME :" + prestoTime + "\n"
-      util.writeResults(resultContent, compareFile)
-    }
-    // scalastyle:off
-    util.readFromFile(compareFile).foreach(line => println(line))
-    // scalastyle:on
+     (BenchMarkingUtil.queries, aggResults).zipped.foreach { (query, results) =>
+       val (parquetTime, orcTime, prestoTime) = results
+       val resultContent: String = "|QUERY : " + query.sqlText + "\n" +
+         "|\t\t\tPARQUET EXECUTION TIME :" + parquetTime + "\n" +
+         "|\t\t\tORC EXECUTION TIME :" + orcTime + "\n" +
+         "|\t\t\tCARBONDATA EXECUTION TIME :" + prestoTime + "\n"
+       util.writeResults(resultContent, compareFile)
+     }
+     // scalastyle:off
+     util.readFromFile(compareFile).foreach(line => println(line))
+     // scalastyle:on*/
     System.exit(0)
   }
 }
