@@ -17,38 +17,64 @@
 
 package org.apache.carbondata.presto;
 
-import org.apache.carbondata.presto.impl.CarbonLocalInputSplit;
-import org.apache.carbondata.presto.impl.CarbonTableCacheModel;
-import org.apache.carbondata.presto.impl.CarbonTableReader;
-import com.facebook.presto.spi.*;
-import com.facebook.presto.spi.connector.ConnectorSplitManager;
-import com.facebook.presto.spi.connector.ConnectorTransactionHandle;
-import com.facebook.presto.spi.predicate.Domain;
-import com.facebook.presto.spi.predicate.Range;
-import com.facebook.presto.spi.predicate.TupleDomain;
-import com.facebook.presto.spi.type.*;
-import com.google.common.collect.ImmutableList;
-import io.airlift.slice.Slice;
-import org.apache.carbondata.core.metadata.datatype.DataType;
-import org.apache.carbondata.core.metadata.schema.table.CarbonTable;
-import org.apache.carbondata.core.metadata.schema.table.column.CarbonColumn;
-import org.apache.carbondata.core.scan.expression.ColumnExpression;
-import org.apache.carbondata.core.scan.expression.Expression;
-import org.apache.carbondata.core.scan.expression.LiteralExpression;
-import org.apache.carbondata.core.scan.expression.conditional.*;
-import org.apache.carbondata.core.scan.expression.logical.AndExpression;
-import org.apache.carbondata.core.scan.expression.logical.OrExpression;
-
 import javax.inject.Inject;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
-import static org.apache.carbondata.presto.Types.checkType;
+import org.apache.carbondata.core.metadata.datatype.DataType;
+import org.apache.carbondata.core.metadata.schema.table.CarbonTable;
+import org.apache.carbondata.core.metadata.schema.table.column.CarbonColumn;
+import org.apache.carbondata.core.scan.expression.ColumnExpression;
+import org.apache.carbondata.core.scan.expression.Expression;
+import org.apache.carbondata.core.scan.expression.LiteralExpression;
+import org.apache.carbondata.core.scan.expression.conditional.EqualToExpression;
+import org.apache.carbondata.core.scan.expression.conditional.GreaterThanEqualToExpression;
+import org.apache.carbondata.core.scan.expression.conditional.GreaterThanExpression;
+import org.apache.carbondata.core.scan.expression.conditional.InExpression;
+import org.apache.carbondata.core.scan.expression.conditional.LessThanEqualToExpression;
+import org.apache.carbondata.core.scan.expression.conditional.LessThanExpression;
+import org.apache.carbondata.core.scan.expression.conditional.ListExpression;
+import org.apache.carbondata.core.scan.expression.logical.AndExpression;
+import org.apache.carbondata.core.scan.expression.logical.BinaryLogicalExpression;
+import org.apache.carbondata.core.scan.expression.logical.OrExpression;
+import org.apache.carbondata.core.scan.filter.intf.ExpressionType;
+import org.apache.carbondata.presto.impl.CarbonLocalInputSplit;
+import org.apache.carbondata.presto.impl.CarbonTableCacheModel;
+import org.apache.carbondata.presto.impl.CarbonTableReader;
+
+import com.facebook.presto.spi.ColumnHandle;
+import com.facebook.presto.spi.ConnectorSession;
+import com.facebook.presto.spi.ConnectorSplit;
+import com.facebook.presto.spi.ConnectorSplitSource;
+import com.facebook.presto.spi.ConnectorTableLayoutHandle;
+import com.facebook.presto.spi.FixedSplitSource;
+import com.facebook.presto.spi.SchemaTableName;
+import com.facebook.presto.spi.connector.ConnectorSplitManager;
+import com.facebook.presto.spi.connector.ConnectorTransactionHandle;
+import com.facebook.presto.spi.predicate.Domain;
+import com.facebook.presto.spi.predicate.Range;
+import com.facebook.presto.spi.predicate.TupleDomain;
+import com.facebook.presto.spi.type.BigintType;
+import com.facebook.presto.spi.type.BooleanType;
+import com.facebook.presto.spi.type.DateType;
+import com.facebook.presto.spi.type.DecimalType;
+import com.facebook.presto.spi.type.DoubleType;
+import com.facebook.presto.spi.type.IntegerType;
+import com.facebook.presto.spi.type.SmallintType;
+import com.facebook.presto.spi.type.TimestampType;
+import com.facebook.presto.spi.type.Type;
+import com.facebook.presto.spi.type.VarcharType;
+import com.facebook.presto.sql.planner.DomainUtils;
+import com.google.common.collect.ImmutableList;
+import io.airlift.slice.Slice;
+
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkState;
 import static java.util.Objects.requireNonNull;
+import static java.util.stream.Collectors.toList;
+import static org.apache.carbondata.presto.Types.checkType;
 
 /**
  * Build Carbontable splits
@@ -112,7 +138,8 @@ public class CarbondataSplitManager implements ConnectorSplitManager {
 
   /**
    * Convert presto-TupleDomain predication into Carbon scan express condition
-   * @param originalConstraint  presto-TupleDomain
+   *
+   * @param originalConstraint presto-TupleDomain
    * @param carbonTable
    * @return
    */
@@ -152,13 +179,17 @@ public class CarbondataSplitManager implements ConnectorSplitManager {
       }
 
       List<Object> singleValues = new ArrayList<>();
-      List<Expression> rangeFilter = new ArrayList<>();
-      for (Range range : domain.getValues().getRanges().getOrderedRanges()) {
+
+      List<Expression> filterRanges = new ArrayList<>();
+
+      Domain simplifiedDomain = DomainUtils.simplifyDomain(domain);
+      for (Range range : simplifiedDomain.getValues().getRanges().getOrderedRanges()) {
+        List<Expression> rangeFilter = new ArrayList<>();
         checkState(!range.isAll()); // Already checked
         if (range.isSingleValue()) {
           singleValues.add(range.getLow().getValue());
         } else {
-          List<String> rangeConjuncts = new ArrayList<>();
+          List<Expression> rangeConjuncts = new ArrayList<>();
           if (!range.getLow().isLowerUnbounded()) {
             Object value = ConvertDataByType(range.getLow().getValue(), type);
             switch (range.getLow().getBound()) {
@@ -168,14 +199,14 @@ public class CarbondataSplitManager implements ConnectorSplitManager {
                 } else {
                   GreaterThanExpression greater = new GreaterThanExpression(colExpression,
                       new LiteralExpression(value, coltype));
-                  rangeFilter.add(greater);
+                  rangeConjuncts.add(greater);
                 }
                 break;
               case EXACTLY:
                 GreaterThanEqualToExpression greater =
                     new GreaterThanEqualToExpression(colExpression,
                         new LiteralExpression(value, coltype));
-                rangeFilter.add(greater);
+                rangeConjuncts.add(greater);
                 break;
               case BELOW:
                 throw new IllegalArgumentException("Low marker should never use BELOW bound");
@@ -191,17 +222,18 @@ public class CarbondataSplitManager implements ConnectorSplitManager {
               case EXACTLY:
                 LessThanEqualToExpression less = new LessThanEqualToExpression(colExpression,
                     new LiteralExpression(value, coltype));
-                rangeFilter.add(less);
+                rangeConjuncts.add(less);
                 break;
               case BELOW:
                 LessThanExpression less2 =
                     new LessThanExpression(colExpression, new LiteralExpression(value, coltype));
-                rangeFilter.add(less2);
+                rangeConjuncts.add(less2);
                 break;
               default:
                 throw new AssertionError("Unhandled bound: " + range.getHigh().getBound());
             }
           }
+          filterRanges.add(combineConjuncts(rangeConjuncts));
         }
       }
 
@@ -221,26 +253,29 @@ public class CarbondataSplitManager implements ConnectorSplitManager {
         candidates = new ListExpression(exs);
 
         if (candidates != null) filters.add(new InExpression(colExpression, candidates));
-      } else if (rangeFilter.size() > 0) {
-        if (rangeFilter.size() > 1) {
-          Expression finalFilters = new OrExpression(rangeFilter.get(0), rangeFilter.get(1));
+      } else if (filterRanges.size() > 0) {
+        filters.addAll(filterRanges);
+
+
+        /*if (rangeFilter.size() > 1) {
+          Expression finalFilters = new AndExpression(rangeFilter.get(0), rangeFilter.get(1));
           if (rangeFilter.size() > 2) {
             for (int i = 2; i < rangeFilter.size(); i++) {
               filters.add(new AndExpression(finalFilters, rangeFilter.get(i)));
             }
           }
         } else if (rangeFilter.size() == 1)//only have one value
-          filters.add(rangeFilter.get(0));
+          filters.add(rangeFilter.get(0));*/
       }
     }
 
     Expression finalFilters;
     List<Expression> tmp = filters.build();
     if (tmp.size() > 1) {
-      finalFilters = new AndExpression(tmp.get(0), tmp.get(1));
+      finalFilters = new OrExpression(tmp.get(0), tmp.get(1));
       if (tmp.size() > 2) {
         for (int i = 2; i < tmp.size(); i++) {
-          finalFilters = new AndExpression(finalFilters, tmp.get(i));
+          finalFilters = new OrExpression(finalFilters, tmp.get(i));
         }
       }
     } else if (tmp.size() == 1) finalFilters = tmp.get(0);
@@ -250,8 +285,45 @@ public class CarbondataSplitManager implements ConnectorSplitManager {
     return finalFilters;
   }
 
+  private Expression combineConjuncts(List<Expression> expressions) {
+    List<Expression> conjuncts =
+        expressions.stream().flatMap(e -> extractConjuncts(e).stream()).collect(toList());
+    return and(conjuncts);
+  }
+
+  private Expression and(List<Expression> expressions) {
+    Expression filter;
+    if (expressions.size() > 1) {
+      filter = new AndExpression(expressions.get(0), expressions.get(1));
+      if (expressions.size() > 2) {
+        for (int i = 2; i < expressions.size(); i++) {
+          filter = new AndExpression(filter, expressions.get(i));
+        }
+      }
+      return filter;
+    } else if (expressions.size() == 1)//only have one value
+      return expressions.get(0);
+    else return null;
+  }
+
+  private List<Expression> extractConjuncts(Expression expression) {
+    return extractPredicates(ExpressionType.AND, expression);
+  }
+
+  private List<Expression> extractPredicates(ExpressionType type, Expression expression) {
+    if (expression instanceof BinaryLogicalExpression
+        && ((BinaryLogicalExpression) expression).getFilterExpressionType() == type) {
+      BinaryLogicalExpression binaryLogicalExpression = (BinaryLogicalExpression) expression;
+      return ImmutableList.<Expression>builder()
+          .addAll(extractPredicates(type, binaryLogicalExpression.getLeft()))
+          .addAll(extractPredicates(type, binaryLogicalExpression.getRight())).build();
+    }
+    return ImmutableList.of(expression);
+  }
+
   /**
    * Convert presto spi Type into Carbondata Type
+   *
    * @param colType
    * @return
    */
