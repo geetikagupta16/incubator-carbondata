@@ -142,13 +142,18 @@ public class CarbondataRecordSetProvider implements ConnectorRecordSetProvider {
       }
 
       List<Object> singleValues = new ArrayList<>();
-      List<Expression> rangeFilter = new ArrayList<>();
+
+      List<Expression> filterRanges = new ArrayList<>();
+      List<Expression> disjuncts = new ArrayList<>();
+
+      //      Domain simplifiedDomain = DomainUtils.simplifyDomain(domain);
       for (Range range : domain.getValues().getRanges().getOrderedRanges()) {
+        List<Expression> rangeFilter = new ArrayList<>();
         checkState(!range.isAll()); // Already checked
         if (range.isSingleValue()) {
           singleValues.add(range.getLow().getValue());
         } else {
-          List<String> rangeConjuncts = new ArrayList<>();
+          List<Expression> rangeConjuncts = new ArrayList<>();
           if (!range.getLow().isLowerUnbounded()) {
             Object value = ConvertDataByType(range.getLow().getValue(), type);
             switch (range.getLow().getBound()) {
@@ -158,14 +163,14 @@ public class CarbondataRecordSetProvider implements ConnectorRecordSetProvider {
                 } else {
                   GreaterThanExpression greater = new GreaterThanExpression(colExpression,
                       new LiteralExpression(value, coltype));
-                  rangeFilter.add(greater);
+                  rangeConjuncts.add(greater);
                 }
                 break;
               case EXACTLY:
                 GreaterThanEqualToExpression greater =
                     new GreaterThanEqualToExpression(colExpression,
                         new LiteralExpression(value, coltype));
-                rangeFilter.add(greater);
+                rangeConjuncts.add(greater);
                 break;
               case BELOW:
                 throw new IllegalArgumentException("Low marker should never use BELOW bound");
@@ -181,29 +186,29 @@ public class CarbondataRecordSetProvider implements ConnectorRecordSetProvider {
               case EXACTLY:
                 LessThanEqualToExpression less = new LessThanEqualToExpression(colExpression,
                     new LiteralExpression(value, coltype));
-                rangeFilter.add(less);
+                rangeConjuncts.add(less);
                 break;
               case BELOW:
                 LessThanExpression less2 =
                     new LessThanExpression(colExpression, new LiteralExpression(value, coltype));
-                rangeFilter.add(less2);
+                rangeConjuncts.add(less2);
                 break;
               default:
                 throw new AssertionError("Unhandled bound: " + range.getHigh().getBound());
             }
           }
+          //filterRanges.addAll(rangeConjuncts);
+          disjuncts.addAll(rangeConjuncts);
+          //filterRanges.add(combineConjuncts(rangeConjuncts));
         }
       }
 
+      // disjuncts.add(and(filterRanges));
       if (singleValues.size() == 1) {
         Expression ex = null;
         if (coltype.equals(DataType.STRING)) {
           ex = new EqualToExpression(colExpression,
               new LiteralExpression(((Slice) singleValues.get(0)).toStringUtf8(), coltype));
-        } else if (coltype.equals(DataType.TIMESTAMP) || coltype.equals(DataType.DATE)) {
-          Long value = (Long) singleValues.get(0) * 1000;
-          ex = new EqualToExpression(colExpression,
-              new LiteralExpression(value , coltype));
         } else ex = new EqualToExpression(colExpression,
             new LiteralExpression(singleValues.get(0), coltype));
         filters.add(ex);
@@ -215,29 +220,34 @@ public class CarbondataRecordSetProvider implements ConnectorRecordSetProvider {
         candidates = new ListExpression(exs);
 
         if (candidates != null) filters.add(new InExpression(colExpression, candidates));
-      } else if (rangeFilter.size() > 0) {
-        if (rangeFilter.size() > 1) {
-          Expression finalFilters = new OrExpression(rangeFilter.get(0), rangeFilter.get(1));
+      } else if (disjuncts.size() > 0) {
+        filters.addAll(disjuncts);
+
+
+        /*if (rangeFilter.size() > 1) {
+          Expression finalFilters = new AndExpression(rangeFilter.get(0), rangeFilter.get(1));
           if (rangeFilter.size() > 2) {
             for (int i = 2; i < rangeFilter.size(); i++) {
               filters.add(new AndExpression(finalFilters, rangeFilter.get(i)));
             }
           }
-        } else if (rangeFilter.size() == 1) filters.add(rangeFilter.get(0));
+        } else if (rangeFilter.size() == 1)//only have one value
+          filters.add(rangeFilter.get(0));*/
       }
     }
 
     Expression finalFilters;
     List<Expression> tmp = filters.build();
     if (tmp.size() > 1) {
-      finalFilters = new AndExpression(tmp.get(0), tmp.get(1));
+      finalFilters = new OrExpression(tmp.get(0), tmp.get(1));
       if (tmp.size() > 2) {
         for (int i = 2; i < tmp.size(); i++) {
-          finalFilters = new AndExpression(finalFilters, tmp.get(i));
+          finalFilters = new OrExpression(finalFilters, tmp.get(i));
         }
       }
     } else if (tmp.size() == 1) finalFilters = tmp.get(0);
-    else return;
+    else//no filter
+      return ;
 
     // todo set into QueryModel
     CarbonInputFormatUtil.processFilterExpression(finalFilters, carbonTable);

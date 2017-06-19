@@ -181,9 +181,9 @@ public class CarbondataSplitManager implements ConnectorSplitManager {
       List<Object> singleValues = new ArrayList<>();
 
       List<Expression> filterRanges = new ArrayList<>();
+      List<Expression> disjuncts = new ArrayList<>();
 
-      Domain simplifiedDomain = DomainUtils.simplifyDomain(domain);
-      for (Range range : simplifiedDomain.getValues().getRanges().getOrderedRanges()) {
+      for (Range range : domain.getValues().getRanges().getOrderedRanges()) {
         List<Expression> rangeFilter = new ArrayList<>();
         checkState(!range.isAll()); // Already checked
         if (range.isSingleValue()) {
@@ -233,10 +233,13 @@ public class CarbondataSplitManager implements ConnectorSplitManager {
                 throw new AssertionError("Unhandled bound: " + range.getHigh().getBound());
             }
           }
-          filterRanges.add(combineConjuncts(rangeConjuncts));
+//filterRanges.addAll(rangeConjuncts);
+          disjuncts.addAll(rangeConjuncts);
+          //filterRanges.add(combineConjuncts(rangeConjuncts));
         }
       }
 
+     // disjuncts.add(and(filterRanges));
       if (singleValues.size() == 1) {
         Expression ex = null;
         if (coltype.equals(DataType.STRING)) {
@@ -253,8 +256,8 @@ public class CarbondataSplitManager implements ConnectorSplitManager {
         candidates = new ListExpression(exs);
 
         if (candidates != null) filters.add(new InExpression(colExpression, candidates));
-      } else if (filterRanges.size() > 0) {
-        filters.addAll(filterRanges);
+      } else if (disjuncts.size() > 0) {
+        filters.addAll(disjuncts);
 
 
         /*if (rangeFilter.size() > 1) {

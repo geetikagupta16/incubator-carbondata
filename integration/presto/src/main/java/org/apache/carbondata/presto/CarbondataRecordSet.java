@@ -85,7 +85,7 @@ public class CarbondataRecordSet implements RecordSet {
         split.getLocalInputSplit().getLocations().toArray(new String[0]),
         split.getLocalInputSplit().getLength(),
         //blockletInfos,
-        ColumnarFormatVersion.valueOf(split.getLocalInputSplit().getVersion()), null));
+        ColumnarFormatVersion.valueOf(split.getLocalInputSplit().getVersion())));
     queryModel.setTableBlockInfos(tableBlockInfoList);
 
     queryExecutor = QueryExecutorFactory.getQueryExecutor(queryModel);
