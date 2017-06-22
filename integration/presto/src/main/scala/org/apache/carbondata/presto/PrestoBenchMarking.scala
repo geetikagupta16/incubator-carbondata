@@ -31,7 +31,6 @@ import com.facebook.presto.tests.DistributedQueryRunner
 import com.google.common.collect.ImmutableMap
 import org.slf4j.{Logger, LoggerFactory}
 
-
 object PrestoBenchMarking {
   val rootPath: String = new File(this.getClass.getResource("/").getPath
                                   + "../../../..").getCanonicalPath
@@ -98,14 +97,14 @@ object PrestoBenchMarking {
       val tableName = "comparetest_carbonV3"
 
       val executionTime: Array[Double] = BenchMarkingUtil.queries.map { queries =>
-     /*   // val query = queries.sqlText.replace("$table", tableName)
+        // val query = queries.sqlText.replace("$table", tableName)
         val time = BenchMarkingUtil.time(stmt.executeQuery(queries.sqlText))
         println("\nSuccessfully Executed the Query : " + queries.sqlText + "\n")
-        time*/
-        val res: ResultSet =stmt.executeQuery(queries.sqlText)
+        time
+      /*  val res: ResultSet =stmt.executeQuery(queries.sqlText)
         res.last()
         println("\nSuccessfully Executed the Query : " + queries.sqlText + "\n and result size is :" + res.getRow() + "\n")
-        0.01
+        0.01*/
       }
       conn.close()
       Some(executionTime)
@@ -129,9 +128,9 @@ object PrestoBenchMarking {
     val compareFile = s"$rootFilePath/BenchmarkingResults.txt"
     val prestoFile = s"$rootFilePath/PrestoBenchmarkingResults.txt"
     val parquetFile = s"$rootFilePath/ParquetBenchmarkingResults.txt"
-    val orcFile = s"$rootFilePath/OrcBenchmarkingResults.txt"
+  //  val orcFile = s"$rootFilePath/OrcBenchmarkingResults.txt"
+    val carbonFile= s"$rootFilePath/CarbonDataBenchmarkingResults.txt"
     val util: BenchMarkingUtil.type = BenchMarkingUtil
-
     // Garbage Collection
     System.gc()
 
@@ -141,27 +140,26 @@ object PrestoBenchMarking {
       }
     }
 
-    /* val parquetResults: List[String] = util.readFromFile(parquetFile)
+     val parquetResults: List[String] = util.readFromFile(parquetFile)
      val prestoResults: List[String] = util.readFromFile(prestoFile)
-     val orcResults: List[String] = util.readFromFile(orcFile)
+     val carbonResults: List[String] = util.readFromFile(carbonFile)
      val aggResults: List[(String, String, String)] =
-       (parquetResults, orcResults, prestoResults).zipped.toList
+       (parquetResults, carbonResults, prestoResults).zipped.toList
 
      util.writeResults("\n\n-------------------------DATE/TIME:"
        + Calendar.getInstance().getTime() +
-       " -----------------------------\n\n", compareFile)
+       " -----------------------------\n\n" ,compareFile)
 
      (BenchMarkingUtil.queries, aggResults).zipped.foreach { (query, results) =>
-       val (parquetTime, orcTime, prestoTime) = results
-       val resultContent: String = "|QUERY : " + query.sqlText + "\n" +
-         "|\t\t\tPARQUET EXECUTION TIME :" + parquetTime + "\n" +
-         "|\t\t\tORC EXECUTION TIME :" + orcTime + "\n" +
-         "|\t\t\tCARBONDATA EXECUTION TIME :" + prestoTime + "\n"
-       util.writeResults(resultContent, compareFile)
+       val (parquetTime, carbonDataTime, prestoTime) = results
+
+       val content= Tabulator.format(List(List("PARQUET", "CARBONDATA","PRESTO"), List(parquetTime, carbonDataTime,prestoTime)))
+       util.writeResults("\n"+query.sqlText,compareFile)
+       util.writeResults("\n"+content, compareFile)
      }
      // scalastyle:off
      util.readFromFile(compareFile).foreach(line => println(line))
-     // scalastyle:on*/
+     // scalastyle:on
     System.exit(0)
   }
 }

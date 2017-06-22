@@ -110,7 +110,7 @@ public class HiveEmbeddedServer2 {
 
     Configuration cfg = new Configuration();
     HiveConf conf = new HiveConf(cfg, HiveConf.class);
-    conf.addToRestrictList("columns.comments");
+    conf.set(HiveConf.ConfVars.SUBMITLOCALTASKVIACHILD.varname, "false");
     conf.set("hive.scratch.dir.permission", "777");
     conf.setVar(ConfVars.SCRATCHDIRPERMISSION, "777");
     scratchDirFile.mkdirs();

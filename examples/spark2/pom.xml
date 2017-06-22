@@ -101,6 +101,7 @@
       </resource>
     </resources>
     <plugins>
+
       <plugin>
         <groupId>org.scala-tools</groupId>
         <artifactId>maven-scala-plugin</artifactId>
@@ -110,6 +111,7 @@
             <id>compile</id>
             <goals>
               <goal>compile</goal>
+              <goal>testCompile</goal>
             </goals>
             <phase>compile</phase>
           </execution>
@@ -128,6 +130,34 @@
           <target>1.7</target>
         </configuration>
       </plugin>
+
+      <plugin>
+         <groupId>org.codehaus.mojo</groupId>
+         <artifactId>exec-maven-plugin</artifactId>
+         <version>1.6.0</version>
+         <executions>
+           <execution>
+             <id>first-execution</id>
+             <goals>
+               <goal>java</goal>
+             </goals>
+             <phase>compile</phase>
+             <configuration>
+               <mainClass>org.apache.carbondata.examples.performance.CarbonDataPerformance</mainClass>
+             </configuration>
+           </execution>
+           <execution>
+             <id>second-execution</id>
+             <goals>
+               <goal>java</goal>
+             </goals>
+             <phase>compile</phase>
+             <configuration>
+               <mainClass>org.apache.carbondata.examples.performance.ParquetPerformance</mainClass>
+             </configuration>
+           </execution>
+         </executions>
+       </plugin>
     </plugins>
   </build>
 
