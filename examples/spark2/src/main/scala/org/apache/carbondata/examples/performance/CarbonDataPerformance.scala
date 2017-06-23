@@ -36,7 +36,7 @@ object CarbonDataPerformance {
     val warehouse = s"$rootPath/integration/presto/test/warehouse"
     val metastoredb = s"$rootPath/integration/presto/test"
 
-    val csvRootPath = "/home/pallavi/data_csv/data_csv/test"
+    val csvRootPath = "/projects/cpp-tpch/tpch-store/store-50"
 
     val customerCsvPath = s"$csvRootPath/customer.csv"
     val lineItemCsvPath = s"$csvRootPath/lineitem.csv"

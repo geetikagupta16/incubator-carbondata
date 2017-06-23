@@ -41,7 +41,7 @@ object ParquetPerformance {
     val rootPath = new File(this.getClass.getResource("/").getPath
                             + "../../../..").getCanonicalPath
 
-    val csvRootPath = "/home/pallavi/data_csv/data_csv/test"
+    val csvRootPath = "/projects/cpp-tpch/tpch-store/store-50"
 
     val storeLocation = s"$rootPath/examples/spark2/target/store"
     val warehouse = s"$rootPath/examples/spark2/target/warehouse"
