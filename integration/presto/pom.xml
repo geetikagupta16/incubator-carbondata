@@ -29,7 +29,7 @@
 
     <artifactId>carbondata-presto</artifactId>
     <name>Apache CarbonData :: presto</name>
-    <packaging>presto-plugin</packaging>
+  <!--  <packaging>presto-plugin</packaging>-->
 
     <properties>
         <presto.version>0.166</presto.version>
@@ -468,12 +468,12 @@
                 </configuration>
             </plugin>
 
-            <plugin>
+     <!--       <plugin>
                 <groupId>io.takari.maven.plugins</groupId>
                 <artifactId>presto-maven-plugin</artifactId>
                 <version>0.1.12</version>
                 <extensions>true</extensions>
-            </plugin>
+            </plugin>-->
 
             <plugin>
                 <groupId>pl.project13.maven</groupId>
@@ -511,7 +511,7 @@
                 </executions>
             </plugin>
 
-            <plugin>
+            <!--<plugin>
                 <groupId>org.codehaus.mojo</groupId>
                 <artifactId>exec-maven-plugin</artifactId>
                 <version>1.6.0</version>
@@ -521,15 +521,15 @@
                         <goals>
                             <goal>java</goal>
                         </goals>
-                      <!--  <phase>
+                      &lt;!&ndash;  <phase>
                             compile
-                        </phase>-->
+                        </phase>&ndash;&gt;
                         <configuration>
                             <mainClass>org.apache.carbondata.presto.PrestoBenchMarking</mainClass>
                         </configuration>
                     </execution>
                 </executions>
-            </plugin>
+            </plugin>-->
         </plugins>
     </build>
 </project>
