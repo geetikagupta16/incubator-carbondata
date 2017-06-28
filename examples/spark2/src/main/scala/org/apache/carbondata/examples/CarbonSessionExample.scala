@@ -19,6 +19,7 @@ package org.apache.carbondata.examples
 
 import java.io.File
 
+import org.apache.spark.SparkConf
 import org.apache.spark.sql.SparkSession
 
 import org.apache.carbondata.core.constants.CarbonCommonConstants
@@ -39,13 +40,29 @@ object CarbonSessionExample {
 
     import org.apache.spark.sql.CarbonSession._
 
-    val spark = SparkSession
+    val sparkConf = new SparkConf(loadDefaults = true)
+    val builder = SparkSession
       .builder()
-      .master("local")
-      .appName("CarbonSessionExample")
-      .config("spark.sql.warehouse.dir", warehouse)
-      .config("spark.driver.host", "localhost")
-      .getOrCreateCarbonSession(storeLocation, metastoredb)
+      .config(sparkConf)
+      .appName("Carbon Thrift Server(uses CarbonSession)")
+      .enableHiveSupport()
+
+    if (!sparkConf.contains("carbon.properties.filepath")) {
+      val sparkHome = System.getenv.get("SPARK_HOME")
+      if (null != sparkHome) {
+        val file = new File(sparkHome + '/' + "conf" + '/' + "carbon.properties")
+        if (file.exists()) {
+          builder.config("carbon.properties.filepath", file.getCanonicalPath)
+          System.setProperty("carbon.properties.filepath", file.getCanonicalPath)
+        }
+      }
+    } else {
+      System.setProperty("carbon.properties.filepath", sparkConf.get("carbon.properties.filepath"))
+    }
+
+    CarbonProperties.getInstance().addProperty(CarbonCommonConstants.STORE_LOCATION, args.head)
+
+    val spark = builder.getOrCreateCarbonSession(args.head)
 
     spark.sparkContext.setLogLevel("WARN")
 
@@ -71,8 +88,9 @@ object CarbonSessionExample {
          | TBLPROPERTIES('SORT_COLUMNS'='', 'DICTIONARY_INCLUDE'='dateField, charField')
        """.stripMargin)
 
-    val path = s"$rootPath/examples/spark2/src/main/resources/data.csv"
+    // val path = "/home/pallavi/WorkSpace/CarbonData_May/incubator-carbondata/examples/spark2/src/main/resources/data.csv"
 
+    val path ="hdfs://localhost:54310/data/data.csv"
     // scalastyle:off
     spark.sql(
       s"""
@@ -85,9 +103,9 @@ object CarbonSessionExample {
 
     spark.sql(
       s"""
-        | SELECT *
-        | FROM carbon_table
-        | WHERE stringfield = 'spark' AND decimalField > 40
+         | SELECT *
+         | FROM carbon_table
+         | WHERE stringfield = 'spark' AND decimalField > 40
       """.stripMargin).show()
 
     spark.sql(
@@ -113,21 +131,21 @@ object CarbonSessionExample {
 
     spark.sql(
       s"""
-        | SELECT t1.*, t2.*
-        | FROM carbon_table t1, carbon_table t2
-        | WHERE t1.stringField = t2.stringField
+         | SELECT t1.*, t2.*
+         | FROM carbon_table t1, carbon_table t2
+         | WHERE t1.stringField = t2.stringField
       """.stripMargin).show()
 
     spark.sql(
       s"""
-        | WITH t1 AS (
-        | SELECT * FROM carbon_table
-        | UNION ALL
-        | SELECT * FROM carbon_table
-        | )
-        | SELECT t1.*, t2.*
-        | FROM t1, carbon_table t2
-        | WHERE t1.stringField = t2.stringField
+         | WITH t1 AS (
+         | SELECT * FROM carbon_table
+         | UNION ALL
+         | SELECT * FROM carbon_table
+         | )
+         | SELECT t1.*, t2.*
+         | FROM t1, carbon_table t2
+         | WHERE t1.stringField = t2.stringField
       """.stripMargin).show()
 
     spark.sql(

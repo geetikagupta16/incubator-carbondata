@@ -21,11 +21,11 @@ import java.io.File
 
 import scala.util.{Failure, Success, Try}
 
+import org.apache.spark.SparkConf
 import org.apache.spark.sql.SparkSession
 
 import org.apache.carbondata.core.constants.CarbonCommonConstants
 import org.apache.carbondata.core.util.CarbonProperties
-import org.apache.carbondata.examples.performance.QueryUtil
 
 object CarbonDataPerformance {
 
@@ -36,7 +36,7 @@ object CarbonDataPerformance {
     val warehouse = s"$rootPath/integration/presto/test/warehouse"
     val metastoredb = s"$rootPath/integration/presto/test"
 
-    val csvRootPath = "/projects/cpp-tpch/tpch-store/store-50"
+    val csvRootPath = "hdfs://localhost:54310/data/test"
 
     val customerCsvPath = s"$csvRootPath/customer.csv"
     val lineItemCsvPath = s"$csvRootPath/lineitem.csv"
@@ -57,13 +57,30 @@ object CarbonDataPerformance {
 
     import org.apache.spark.sql.CarbonSession._
 
-    val spark = SparkSession
+    val sparkConf = new SparkConf(loadDefaults = true)
+    val builder = SparkSession
       .builder()
-      .master("local")
-      .appName("CarbonSessionExample")
-      .config("spark.sql.warehouse.dir", warehouse)
-      .config("spark.driver.host", "localhost")
-      .getOrCreateCarbonSession(storeLocation, metastoredb)
+      .config(sparkConf)
+      .appName("Carbon Thrift Server(uses CarbonSession)")
+      .enableHiveSupport()
+
+    if (!sparkConf.contains("carbon.properties.filepath")) {
+      val sparkHome = System.getenv.get("SPARK_HOME")
+      if (null != sparkHome) {
+        val file = new File(sparkHome + '/' + "conf" + '/' + "carbon.properties")
+        if (file.exists()) {
+          builder.config("carbon.properties.filepath", file.getCanonicalPath)
+          System.setProperty("carbon.properties.filepath", file.getCanonicalPath)
+        }
+      }
+    } else {
+      System.setProperty("carbon.properties.filepath", sparkConf.get("carbon.properties.filepath"))
+    }
+
+    CarbonProperties.getInstance().addProperty(CarbonCommonConstants.STORE_LOCATION, args.head)
+
+    val spark = builder.getOrCreateCarbonSession(args.head)
+
 
     spark.sparkContext.setLogLevel("WARN")
 
