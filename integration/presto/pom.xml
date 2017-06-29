@@ -511,7 +511,7 @@
                 </executions>
             </plugin>
 
-            <!--<plugin>
+            <plugin>
                 <groupId>org.codehaus.mojo</groupId>
                 <artifactId>exec-maven-plugin</artifactId>
                 <version>1.6.0</version>
@@ -521,15 +521,15 @@
                         <goals>
                             <goal>java</goal>
                         </goals>
-                      &lt;!&ndash;  <phase>
+                        <phase>
                             compile
-                        </phase>&ndash;&gt;
+                        </phase>
                         <configuration>
                             <mainClass>org.apache.carbondata.presto.PrestoBenchMarking</mainClass>
                         </configuration>
                     </execution>
                 </executions>
-            </plugin>-->
+            </plugin>
         </plugins>
     </build>
 </project>
