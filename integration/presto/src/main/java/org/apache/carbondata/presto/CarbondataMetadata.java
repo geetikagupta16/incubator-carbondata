@@ -70,8 +70,11 @@ public class CarbondataMetadata implements ConnectorMetadata {
   public List<SchemaTableName> listTables(ConnectorSession session, String schemaNameOrNull) {
 
     List<String> schemaNames;
+    List<String> carbonStoreSchemas = carbonTableReader.getSchemaNames();
     if (schemaNameOrNull != null) {
-      schemaNames = ImmutableList.of(schemaNameOrNull);
+      if(carbonStoreSchemas.contains(schemaNameOrNull)) {
+        schemaNames = ImmutableList.of(schemaNameOrNull);
+      } else throw new SchemaNotFoundException(schemaNameOrNull);
     } else {
       schemaNames = carbonTableReader.getSchemaNames();
     }
