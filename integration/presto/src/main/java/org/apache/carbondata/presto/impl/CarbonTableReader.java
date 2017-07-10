@@ -102,7 +102,7 @@ public class CarbonTableReader {
           }
         }
       }
-      updateSchemaTables();
+      updateSchemaTables(table);
       parseCarbonMetadata(table);
     }
 
@@ -159,7 +159,7 @@ public class CarbonTableReader {
 
   public CarbonTable getTable(SchemaTableName schemaTableName) {
     try {
-      updateSchemaTables();
+      updateSchemaTables(schemaTableName);
     } catch (Exception e) {
       throw new RuntimeException(e);
     }
@@ -170,17 +170,23 @@ public class CarbonTableReader {
     return table;
   }
 
-  public void updateSchemaTables() {
+  public void updateSchemaTables(SchemaTableName schemaTableName) {
     // update logic determine later
     if (carbonFileList == null) {
       updateSchemaList();
     }
     tableList = new LinkedList<>();
     for (CarbonFile cf : carbonFileList.listFiles()) {
-      if (!cf.getName().endsWith(".mdt")) {
-        for (CarbonFile table : cf.listFiles()) {
-          tableList.add(new SchemaTableName(cf.getName(), table.getName()));
-        }
+      if(cf.getName().equals(schemaTableName.getSchemaName()) /*&& (!cf.getName().endsWith(".mdt"))*/) {
+        filterTablesInSchema(cf.listFiles(),schemaTableName);
+      }
+    }
+  }
+
+  private void filterTablesInSchema(CarbonFile [] carbonFiles,SchemaTableName schemaTableName){
+    for(CarbonFile cf:carbonFiles){
+      if(cf.getName().equals(schemaTableName.getTableName())){
+        tableList.add(new SchemaTableName(schemaTableName.getSchemaName(), cf.getName()));
       }
     }
   }

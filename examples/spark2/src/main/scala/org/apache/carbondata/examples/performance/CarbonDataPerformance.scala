@@ -36,7 +36,7 @@ object CarbonDataPerformance {
     val warehouse = s"$rootPath/integration/presto/test/warehouse"
     val metastoredb = s"$rootPath/integration/presto/test"
 
-    val csvRootPath = "hdfs://localhost:54310/data/test"
+    val csvRootPath = "/home/pallavi/data_csv/data_csv/test"
 
     val customerCsvPath = s"$csvRootPath/customer.csv"
     val lineItemCsvPath = s"$csvRootPath/lineitem.csv"
@@ -57,41 +57,24 @@ object CarbonDataPerformance {
 
     import org.apache.spark.sql.CarbonSession._
 
-    val sparkConf = new SparkConf(loadDefaults = true)
-    val builder = SparkSession
+    val spark = SparkSession
       .builder()
-      .config(sparkConf)
-      .appName("Carbon Thrift Server(uses CarbonSession)")
-      .enableHiveSupport()
-
-    if (!sparkConf.contains("carbon.properties.filepath")) {
-      val sparkHome = System.getenv.get("SPARK_HOME")
-      if (null != sparkHome) {
-        val file = new File(sparkHome + '/' + "conf" + '/' + "carbon.properties")
-        if (file.exists()) {
-          builder.config("carbon.properties.filepath", file.getCanonicalPath)
-          System.setProperty("carbon.properties.filepath", file.getCanonicalPath)
-        }
-      }
-    } else {
-      System.setProperty("carbon.properties.filepath", sparkConf.get("carbon.properties.filepath"))
-    }
-
-    CarbonProperties.getInstance().addProperty(CarbonCommonConstants.STORE_LOCATION, args.head)
-
-    val spark = builder.getOrCreateCarbonSession(args.head)
-
+      .master("local")
+      .appName("CarbonSessionExample")
+      .config("spark.sql.warehouse.dir", warehouse)
+      .config("spark.driver.host", "localhost")
+      .getOrCreateCarbonSession(storeLocation, metastoredb)
 
     spark.sparkContext.setLogLevel("WARN")
 
-    spark.sql("DROP TABLE IF EXISTS NATION")
-    spark.sql("DROP TABLE IF EXISTS REGION")
-    spark.sql("DROP TABLE IF EXISTS PART")
-    spark.sql("DROP TABLE IF EXISTS PARTSUPP")
-    spark.sql("DROP TABLE IF EXISTS SUPPLIER")
-    spark.sql("DROP TABLE IF EXISTS CUSTOMER")
-    spark.sql("DROP TABLE IF EXISTS ORDERS")
-    spark.sql("DROP TABLE IF EXISTS LINEITEM")
+    spark.sql("DROP TABLE IF EXISTS NATION").show()
+    spark.sql("DROP TABLE IF EXISTS REGION").show()
+    spark.sql("DROP TABLE IF EXISTS PART").show()
+    spark.sql("DROP TABLE IF EXISTS PARTSUPP").show()
+    spark.sql("DROP TABLE IF EXISTS SUPPLIER").show()
+    spark.sql("DROP TABLE IF EXISTS CUSTOMER").show()
+    spark.sql("DROP TABLE IF EXISTS ORDERS").show()
+    spark.sql("DROP TABLE IF EXISTS LINEITEM").show()
 
 
     // Create table
@@ -100,13 +83,13 @@ object CarbonDataPerformance {
               "N_NAME STRING," +
               "N_REGIONKEY  INT," +
               "N_COMMENT STRING) " +
-              "STORED BY 'carbondata'")
+              "STORED BY 'carbondata'").show()
 
     spark.sql("CREATE TABLE REGION ( " +
               "R_REGIONKEY INT ," +
               "\n R_NAME STRING ," +
               "\n R_COMMENT STRING) " +
-              "STORED BY 'carbondata'")
+              "STORED BY 'carbondata'").show()
 
     spark.sql("CREATE TABLE PART ( " +
               "P_PARTKEY INT ," +
@@ -120,7 +103,7 @@ object CarbonDataPerformance {
               "\n P_RETAILPRICE " +
               "DECIMAL(15,2) ," +
               "\n P_COMMENT STRING ) " +
-              "STORED BY 'carbondata'")
+              "STORED BY 'carbondata'").show()
 
     spark.sql("CREATE TABLE SUPPLIER ( " +
               "S_SUPPKEY INT ," +
@@ -131,7 +114,7 @@ object CarbonDataPerformance {
               "\n S_ACCTBAL DECIMAL(15,2) ," +
               "\n S_COMMENT " +
               "STRING )" +
-              " STORED BY 'carbondata'")
+              " STORED BY 'carbondata'").show()
 
     spark.sql("CREATE TABLE PARTSUPP ( " +
               "PS_PARTKEY INT ," +
@@ -140,7 +123,7 @@ object CarbonDataPerformance {
               "\n " +
               "PS_SUPPLYCOST DECIMAL(15,2) ," +
               "\n PS_COMMENT STRING ) " +
-              "STORED BY 'carbondata'")
+              "STORED BY 'carbondata'").show()
 
     spark.sql("CREATE TABLE CUSTOMER ( " +
               "C_CUSTKEY INT ," +
@@ -152,7 +135,7 @@ object CarbonDataPerformance {
               "\n C_MKTSEGMENT " +
               "STRING ," +
               "\n C_COMMENT STRING ) " +
-              "STORED BY 'carbondata'")
+              "STORED BY 'carbondata'").show()
 
     spark.sql("CREATE TABLE ORDERS ( " +
               "O_ORDERKEY INT ," +
@@ -164,7 +147,7 @@ object CarbonDataPerformance {
               " , \n O_CLERK STRING , " +
               "\n O_SHIPPRIORITY INT ," +
               "\n O_COMMENT STRING ) " +
-              "STORED BY 'carbondata'")
+              "STORED BY 'carbondata'").show()
 
     spark.sql("CREATE TABLE LINEITEM ( " +
               "L_ORDERKEY INT ," +
@@ -183,42 +166,42 @@ object CarbonDataPerformance {
               "\n L_SHIPINSTRUCT STRING ," +
               "\n L_SHIPMODE STRING ,\n " +
               "L_COMMENT STRING ) " +
-              "STORED BY 'carbondata'")
+              "STORED BY 'carbondata'").show()
 
     spark.sql(s"LOAD DATA LOCAL INPATH '$nationCsvPath' INTO TABLE nation " +
               "OPTIONS('DELIMITER'='|' , 'QUOTECHAR'='\"','FILEHEADER'='N_NATIONKEY,N_NAME," +
-              "N_REGIONKEY,N_COMMENT')")
+              "N_REGIONKEY,N_COMMENT')").show()
 
     spark.sql(s"LOAD DATA LOCAL INPATH '$regionCsvPath' INTO TABLE region " +
               "OPTIONS('DELIMITER'='|' , 'QUOTECHAR'='\"','FILEHEADER'='R_REGIONKEY,R_NAME," +
-              "R_COMMENT')")
+              "R_COMMENT')").show()
 
     spark.sql(s"LOAD DATA LOCAL INPATH '$partCsvPath' INTO TABLE part OPTIONS" +
               "('DELIMITER'='|' , 'QUOTECHAR'='\"','FILEHEADER'='P_PARTKEY,P_NAME,P_MFGR,P_BRAND," +
-              "P_TYPE,P_SIZE,P_CONTAINER,P_RETAILPRICE,P_COMMENT')")
+              "P_TYPE,P_SIZE,P_CONTAINER,P_RETAILPRICE,P_COMMENT')").show()
 
     spark.sql(s"LOAD DATA LOCAL INPATH '$supplierCsvPath' INTO TABLE supplier " +
               "OPTIONS('DELIMITER'='|' , 'QUOTECHAR'='\"','FILEHEADER'=' S_SUPPKEY,             " +
-              "S_NAME,S_ADDRESS,S_NATIONKEY,S_PHONE,S_ACCTBAL,S_COMMENT')")
+              "S_NAME,S_ADDRESS,S_NATIONKEY,S_PHONE,S_ACCTBAL,S_COMMENT')").show()
 
     spark.sql(s"LOAD DATA LOCAL INPATH '$partSupCsvPath' INTO TABLE partsupp " +
               "OPTIONS('DELIMITER'='|' , 'QUOTECHAR'='\"','FILEHEADER'='PS_PARTKEY,PS_SUPPKEY ," +
-              "PS_AVAILQTY,PS_SUPPLYCOST,PS_COMMENT')")
+              "PS_AVAILQTY,PS_SUPPLYCOST,PS_COMMENT')").show()
 
     spark.sql(s"LOAD DATA LOCAL INPATH '$customerCsvPath' INTO TABLE customer " +
               "OPTIONS('DELIMITER'='|' , 'QUOTECHAR'='\"' , 'FILEHEADER'='C_CUSTKEY,C_NAME," +
-              "C_ADDRESS,C_NATIONKEY,C_PHONE,C_ACCTBAL,C_MKTSEGMENT,C_COMMENT')")
+              "C_ADDRESS,C_NATIONKEY,C_PHONE,C_ACCTBAL,C_MKTSEGMENT,C_COMMENT')").show()
 
     spark.sql(s"LOAD DATA LOCAL INPATH '$ordersCsvPath' INTO TABLE orders " +
               "OPTIONS('DELIMITER'='|' , 'QUOTECHAR'='\"','FILEHEADER'='O_ORDERKEY,O_CUSTKEY," +
               "O_ORDERSTATUS,O_TOTALPRICE,O_ORDERDATE,O_ORDERPRIORITY,O_CLERK,O_SHIPPRIORITY," +
-              "O_COMMENT')")
+              "O_COMMENT')").show()
 
     spark.sql(s"LOAD DATA LOCAL INPATH '$lineItemCsvPath' INTO TABLE lineitem " +
               "OPTIONS('DELIMITER'='|' , 'QUOTECHAR'='\"','FILEHEADER'=' L_ORDERKEY,L_PARTKEY," +
               "L_SUPPKEY,L_LINENUMBER,L_QUANTITY,L_EXTENDEDPRICE,L_DISCOUNT,L_TAX,L_RETURNFLAG," +
               "L_LINESTATUS,L_SHIPDATE,L_COMMITDATE,L_RECEIPTDATE,L_SHIPINSTRUCT,L_SHIPMODE," +
-              "L_COMMENT')")
+              "L_COMMENT')").show()
 
     spark.sql("SELECT * FROM NATION").show()
     spark.sql("SELECT * FROM REGION").show()
