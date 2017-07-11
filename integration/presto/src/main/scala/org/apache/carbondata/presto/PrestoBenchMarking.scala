@@ -99,8 +99,18 @@ object PrestoBenchMarking {
       val stmt: Statement = conn.createStatement
 
       val executionTime: Array[Double] = BenchMarkingUtil.queries.map { queries =>
-        val time = BenchMarkingUtil.time(stmt.executeQuery(queries.sqlText))
-        println("\nSuccessfully Executed the Query : " + queries.sqlText + "\n")
+        /*  val time = BenchMarkingUtil.time(stmt.executeQuery(queries.sqlText))
+               println("\nSuccessfully Executed the Query : " + queries.sqlText + "\n")
+               time*/
+
+        val time=BenchMarkingUtil.time{
+          val res:ResultSet=stmt.executeQuery(queries.sqlText)
+          var i=0
+          while (res.next()){
+            i=i+1
+          }
+          println(">>>>>>>>>>>>>>>  Number of rows  : "+i)
+        }
         time
       }
       conn.close()
