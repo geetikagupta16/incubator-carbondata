@@ -101,6 +101,7 @@ public class CarbondataSplitManager implements ConnectorSplitManager {
 
     if (cache != null) {
       try {
+        carbonTableReader.setFilter(filters);
         List<CarbonLocalInputSplit> splits = carbonTableReader.getInputSplits2(cache, filters);
 
         ImmutableList.Builder<ConnectorSplit> cSplits = ImmutableList.builder();
@@ -232,9 +233,13 @@ public class CarbondataSplitManager implements ConnectorSplitManager {
         Expression ex = null;
         if (coltype.equals(DataType.STRING)) {
           ex = new EqualToExpression(colExpression,
-              new LiteralExpression(((Slice) singleValues.get(0)).toStringUtf8(), coltype));
+                  new LiteralExpression(((Slice) singleValues.get(0)).toStringUtf8(), coltype));
+        } else if (coltype.equals(DataType.TIMESTAMP) || coltype.equals(DataType.DATE)) {
+          Long value = (Long) singleValues.get(0) * 1000;
+          ex = new EqualToExpression(colExpression,
+                  new LiteralExpression(value , coltype));
         } else ex = new EqualToExpression(colExpression,
-            new LiteralExpression(singleValues.get(0), coltype));
+                new LiteralExpression(singleValues.get(0), coltype));
         filters.add(ex);
       } else if (singleValues.size() > 1) {
         ListExpression candidates = null;

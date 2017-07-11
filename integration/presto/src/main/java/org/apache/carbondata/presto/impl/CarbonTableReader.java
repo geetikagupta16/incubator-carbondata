@@ -93,6 +93,7 @@ public class CarbonTableReader {
    */
   private CarbonFile carbonFileList;
   private FileFactory.FileType fileType;
+  private Expression filter;
 
   /**
    * A cache for Carbon reader, with this cache,
@@ -858,5 +859,13 @@ public class CarbonTableReader {
             throw new IndexBuilderException(e);
         }*/
     return rowCount;
+  }
+
+  public Expression getFilter() {
+    return filter;
+  }
+
+  public void setFilter(Expression filter) {
+    this.filter = filter;
   }
 }

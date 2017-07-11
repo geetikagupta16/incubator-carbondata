@@ -119,7 +119,7 @@ public class CarbondataRecordSetProvider implements ConnectorRecordSetProvider {
     //queryModel.setFilterExpressionResolverTree(new FilterResolverIntf());
 
     //Build Predicate Expression
-    ImmutableList.Builder<Expression> filters = ImmutableList.builder();
+    /*ImmutableList.Builder<Expression> filters = ImmutableList.builder();
 
     Domain domain = null;
 
@@ -237,11 +237,11 @@ public class CarbondataRecordSetProvider implements ConnectorRecordSetProvider {
       }
     } else if (tmp.size() == 1) finalFilters = tmp.get(0);
     else return;
-
+*/
     // todo set into QueryModel
-    CarbonInputFormatUtil.processFilterExpression(finalFilters, carbonTable);
+//    CarbonInputFormatUtil.processFilterExpression(carbonTableReader.getFilter(), carbonTable);
     queryModel.setFilterExpressionResolverTree(
-        CarbonInputFormatUtil.resolveFilter(finalFilters, queryModel.getAbsoluteTableIdentifier()));
+        CarbonInputFormatUtil.resolveFilter(carbonTableReader.getFilter(), queryModel.getAbsoluteTableIdentifier()));
   }
 
   public static DataType Spi2CarbondataTypeMapper(CarbondataColumnHandle carbondataColumnHandle) {
