@@ -24,6 +24,8 @@ object BenchMarkingUtil {
 
   val queries: Array[Query] = Array(
 
+
+/*
     Query("select\n        l_returnflag,\n        l_linestatus,\n        sum(l_quantity) as " +
           "sum_qty,\n        sum(l_extendedprice) as sum_base_price,\n        sum(l_extendedprice" +
           " * (1 - l_discount)) as sum_disc_price,\n        sum(l_extendedprice * (1 - " +
@@ -47,9 +49,9 @@ object BenchMarkingUtil {
           "*\n                from\n                        lineitem\n                where\n    " +
           "                    l_orderkey = o.o_orderkey\n                        and " +
           "l_commitdate < l_receiptdate\n        )\ngroup by\n        o_orderpriority\norder by\n" +
-          "        o_orderpriority","",""),
+          "        o_orderpriority","",""),*/
 
-    Query("select\n        n_name,\n        sum(l_extendedprice * (1 - l_discount)) as " +
+    /*Query("select\n        n_name,\n        sum(l_extendedprice * (1 - l_discount)) as " +
           "revenue\nfrom\n        customer,\n        orders,\n        lineitem,\n        " +
           "supplier,\n        nation,\n        region\nwhere\n        c_custkey = o_custkey\n    " +
           "    and l_orderkey = o_orderkey\n        and l_suppkey = s_suppkey\n        and " +
@@ -58,30 +60,30 @@ object BenchMarkingUtil {
           "cast('1993-01-01' as timestamp)\n        and o_orderdate < cast('1994-01-01' as timestamp)" +
           "\ngroup by\n        n_name\norder " +
           "by\n        revenue desc","",""),
-
-    Query("select\n        o_orderpriority,\n        count(*) as order_count\nfrom\n        " +
+*/
+   /* Query("select\n        o_orderpriority,\n        count(*) as order_count\nfrom\n        " +
           "orders as o\nwhere\n        o_orderdate >= cast('1996-05-01' as timestamp)\n        and o_orderdate < " +
           "cast('1996-08-01' as timestamp)\n        and exists (\n                select\n                        " +
           "*\n                from\n                        lineitem\n                where\n    " +
           "                    l_orderkey = o.o_orderkey\n                        and " +
           "l_commitdate < l_receiptdate\n        )\ngroup by\n        o_orderpriority\norder by\n" +
-          "        o_orderpriority","",""),
+          "        o_orderpriority","",""),*/
 
-    Query("select\n        n_name,\n        sum(l_extendedprice * (1 - l_discount)) as " +
+    /*Query("select\n        n_name,\n        sum(l_extendedprice * (1 - l_discount)) as " +
           "revenue\nfrom\n        customer,\n        orders,\n        lineitem,\n        " +
           "supplier,\n        nation,\n        region\nwhere\n        c_custkey = o_custkey\n    " +
           "    and l_orderkey = o_orderkey\n        and l_suppkey = s_suppkey\n        and " +
           "c_nationkey = s_nationkey\n        and s_nationkey = n_nationkey\n        and " +
           "n_regionkey = r_regionkey\n        and r_name = 'AFRICA'\n        and o_orderdate >= " +
           "cast('1993-01-01' as timestamp)\n        and o_orderdate < cast('1994-01-01' as timestamp) \ngroup by\n        n_name\norder " +
-          "by\n        revenue desc","",""),
+          "by\n        revenue desc","",""),*/
 
-    Query("select\n        sum(l_extendedprice * l_discount) as revenue\nfrom\n        " +
+    /*Query("select\n        sum(l_extendedprice * l_discount) as revenue\nfrom\n        " +
           "lineitem\nwhere\n        l_shipdate >= cast('1993-01-01' as timestamp)\n        and l_shipdate < " +
           "cast('1994-01-01' as timestamp) \n        and l_discount between 0.06 - 0.01 and 0.06 + 0.01\n        and " +
-          "l_quantity < 25","",""),
+          "l_quantity < 25","",""),*/
 
-    Query("select\n        supp_nation,\n        cust_nation,\n        l_year,\n        sum" +
+    /*Query("select\n        supp_nation,\n        cust_nation,\n        l_year,\n        sum" +
           "(volume) as revenue\nfrom\n        (\n                select\n                        " +
           "n1.n_name as supp_nation,\n                        n2.n_name as cust_nation,\n        " +
           "                year(l_shipdate) as l_year,\n                        l_extendedprice *" +
@@ -96,7 +98,7 @@ object BenchMarkingUtil {
           "          or (n1.n_name = 'PERU' and n2.n_name = 'KENYA')\n                        )\n" +
           "                        and l_shipdate between cast('1995-01-01' as timestamp) and cast('1996-12-31' as timestamp)\n        " +
           ") as shipping\ngroup by\n        supp_nation,\n        cust_nation,\n        " +
-          "l_year\norder by\n        supp_nation,\n        cust_nation,\n        l_year","",""),
+          "l_year\norder by\n        supp_nation,\n        cust_nation,\n        l_year","",""),*/
 
     Query("select\n        o_year,\n        sum(case\n                when nation = 'PERU' then " +
           "volume\n                else 0\n        end) / sum(volume) as mkt_share\nfrom\n       " +
@@ -113,7 +115,7 @@ object BenchMarkingUtil {
           "          and r_name = 'AMERICA'\n                        and s_nationkey = n2" +
           ".n_nationkey\n                        and o_orderdate between cast('1995-01-01' as timestamp) and " +
           " cast('1996-12-31' as timestamp)\n                        and p_type = 'ECONOMY BURNISHED NICKEL'\n       " +
-          " ) as all_nations\ngroup by\n        o_year\norder by\n        o_year","",""),
+          " ) as all_nations\ngroup by\n        o_year\norder by\n        o_year","","")/*,
 
 
     Query("select\n        c_custkey,\n        c_name,\n        sum(l_extendedprice * (1 - " +
@@ -181,7 +183,7 @@ object BenchMarkingUtil {
           "ps_suppkey\nfrom\n    tmp4, tmp3\nwhere\n    ps_partkey = l_partkey\n    and " +
           "ps_suppkey = l_suppkey\n    and ps_availqty > sum_quantity\n)\nselect\n    s_name,\n  " +
           "  s_address\nfrom\n    supplier\nwhere\n    s_suppkey IN (select ps_suppkey from tmp5)" +
-          "\norder by s_name","","")
+          "\norder by s_name","","")*/
   )
 
 

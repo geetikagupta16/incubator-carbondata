@@ -77,6 +77,7 @@ public class CarbondataSplitManager implements ConnectorSplitManager {
 
     CarbonTableCacheModel cache = carbonTableReader.getCarbonCache(key);
     Expression filters = parseFilterExpression(layoutHandle.getConstraint(), cache.carbonTable);
+    carbonTableReader.setFilters(filters);
 
     if (cache != null) {
       try {
@@ -137,10 +138,10 @@ public class CarbondataSplitManager implements ConnectorSplitManager {
       ColumnExpression colExpression =
           new ColumnExpression(cdch.getColumnName(), target.get().getDataType());
       //colExpression.setColIndex(cs.getSchemaOrdinal());
-      colExpression.setDimension(target.get().isDimension());
+      /*colExpression.setDimension(target.get().isDimension());
       colExpression.setDimension(
           carbonTable.getDimensionByName(carbonTable.getFactTableName(), cdch.getColumnName()));
-      colExpression.setCarbonColumn(target.get());
+      colExpression.setCarbonColumn(target.get());*/
 
       domain = originalConstraint.getDomains().get().get(c);
       checkArgument(domain.getType().isOrderable(), "Domain type must be orderable");
@@ -210,6 +211,10 @@ public class CarbondataSplitManager implements ConnectorSplitManager {
         if (coltype.equals(DataType.STRING)) {
           ex = new EqualToExpression(colExpression,
               new LiteralExpression(((Slice) singleValues.get(0)).toStringUtf8(), coltype));
+        } else if (coltype.equals(DataType.TIMESTAMP) || coltype.equals(DataType.DATE)) {
+          Long value = (Long) singleValues.get(0) * 1000;
+          ex = new EqualToExpression(colExpression,
+                  new LiteralExpression(value , coltype));
         } else ex = new EqualToExpression(colExpression,
             new LiteralExpression(singleValues.get(0), coltype));
         filters.add(ex);

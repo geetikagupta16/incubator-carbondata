@@ -46,6 +46,7 @@ import org.apache.carbondata.hadoop.util.CarbonInputFormatUtil;
 import javax.inject.Inject;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 import static org.apache.carbondata.presto.Types.checkType;
@@ -119,7 +120,7 @@ public class CarbondataRecordSetProvider implements ConnectorRecordSetProvider {
     //queryModel.setFilterExpressionResolverTree(new FilterResolverIntf());
 
     //Build Predicate Expression
-    ImmutableList.Builder<Expression> filters = ImmutableList.builder();
+    /*ImmutableList.Builder<Expression> filters = ImmutableList.builder();
 
     Domain domain = null;
 
@@ -237,12 +238,13 @@ public class CarbondataRecordSetProvider implements ConnectorRecordSetProvider {
         }
       }
     } else if (tmp.size() == 1) finalFilters = tmp.get(0);
-    else return;
+    else return;*/
 
+    if(Objects.isNull(carbonTableReader.getFilters())) return ;
     // todo set into QueryModel
-    CarbonInputFormatUtil.processFilterExpression(finalFilters, carbonTable);
+    CarbonInputFormatUtil.processFilterExpression(carbonTableReader.getFilters(), carbonTable);
     queryModel.setFilterExpressionResolverTree(
-        CarbonInputFormatUtil.resolveFilter(finalFilters, queryModel.getAbsoluteTableIdentifier()));
+        CarbonInputFormatUtil.resolveFilter(carbonTableReader.getFilters(), queryModel.getAbsoluteTableIdentifier()));
   }
 
   public static DataType Spi2CarbondataTypeMapper(CarbondataColumnHandle carbondataColumnHandle) {

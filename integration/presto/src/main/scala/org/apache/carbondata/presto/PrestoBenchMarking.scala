@@ -106,7 +106,9 @@ object PrestoBenchMarking {
         val time=BenchMarkingUtil.time{
           val res:ResultSet=stmt.executeQuery(queries.sqlText)
           var i=0
+
           while (res.next()){
+//            println(" "+ res.getInt("o_orderkey"))
             i=i+1
           }
           println(">>>>>>>>>>>>>>>  Number of rows  : "+i)

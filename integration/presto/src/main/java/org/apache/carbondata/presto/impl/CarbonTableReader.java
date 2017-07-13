@@ -79,6 +79,7 @@ public class CarbonTableReader {
   private List<SchemaTableName> tableList;
   private CarbonFile carbonFileList;
   private FileFactory.FileType fileType;
+  private Expression filters;
 
   // A cache for Carbon reader
   private ConcurrentHashMap<SchemaTableName, CarbonTableCacheModel> cc;
@@ -86,6 +87,7 @@ public class CarbonTableReader {
   @Inject public CarbonTableReader(CarbonTableConfig config) {
     this.config = requireNonNull(config, "CarbonTableConfig is null");
     this.cc = new ConcurrentHashMap<>();
+    this.filters = null;
   }
 
   // for worker node to initialize carbon metastore
@@ -735,5 +737,13 @@ public class CarbonTableReader {
             throw new IndexBuilderException(e);
         }*/
     return rowCount;
+  }
+
+  public Expression getFilters() {
+    return filters;
+  }
+
+  public void setFilters(Expression filters) {
+    this.filters = filters;
   }
 }

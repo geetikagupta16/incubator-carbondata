@@ -36,7 +36,7 @@ object CarbonDataPerformance {
     val warehouse = s"$rootPath/integration/presto/test/warehouse"
     val metastoredb = s"$rootPath/integration/presto/test"
 
-    val csvRootPath = "/home/pallavi/data_csv/data_csv/test"
+    val csvRootPath = "/home/geetika/Downloads/test"
 
     val customerCsvPath = s"$csvRootPath/customer.csv"
     val lineItemCsvPath = s"$csvRootPath/lineitem.csv"
@@ -203,7 +203,7 @@ object CarbonDataPerformance {
               "L_LINESTATUS,L_SHIPDATE,L_COMMITDATE,L_RECEIPTDATE,L_SHIPINSTRUCT,L_SHIPMODE," +
               "L_COMMENT')").show()
 
-    spark.sql("SELECT * FROM NATION").show()
+    /*spark.sql("SELECT * FROM NATION").show()
     spark.sql("SELECT * FROM REGION").show()
     spark.sql("SELECT * FROM PART").show()
     spark.sql("SELECT * FROM SUPPLIER").show()
@@ -212,7 +212,7 @@ object CarbonDataPerformance {
     spark.sql("SELECT * FROM ORDERS").show()
     spark.sql("SELECT * FROM LINEITEM").show()
     spark.sql("drop table if exists q18_large_volume_customer_cached").show()
-
+*/
     Try {
       QueryUtil.evaluateTimeForQuery(queryList, spark)
     } match {
