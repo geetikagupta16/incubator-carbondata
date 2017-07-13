@@ -46,6 +46,7 @@ import org.apache.carbondata.hadoop.util.CarbonInputFormatUtil;
 import javax.inject.Inject;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 import static org.apache.carbondata.presto.Types.checkType;
@@ -240,11 +241,12 @@ public class CarbondataRecordSetProvider implements ConnectorRecordSetProvider {
 */
     // todo set into QueryModel
 //    CarbonInputFormatUtil.processFilterExpression(carbonTableReader.getFilter(), carbonTable);
+    if(Objects.isNull(carbonTableReader.getFilter())) return;
     queryModel.setFilterExpressionResolverTree(
         CarbonInputFormatUtil.resolveFilter(carbonTableReader.getFilter(), queryModel.getAbsoluteTableIdentifier()));
   }
 
-  public static DataType Spi2CarbondataTypeMapper(CarbondataColumnHandle carbondataColumnHandle) {
+  /*public static DataType Spi2CarbondataTypeMapper(CarbondataColumnHandle carbondataColumnHandle) {
     Type colType = carbondataColumnHandle.getColumnType();
     if (colType == BooleanType.BOOLEAN) return DataType.BOOLEAN;
     else if (colType == SmallintType.SMALLINT) return DataType.SHORT;
@@ -267,4 +269,5 @@ public class CarbondataRecordSetProvider implements ConnectorRecordSetProvider {
 
     return rawdata;
   }
+*/
 }
