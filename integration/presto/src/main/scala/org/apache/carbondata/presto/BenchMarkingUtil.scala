@@ -23,7 +23,11 @@ object BenchMarkingUtil {
 
   val queries: Array[Query] = Array(
 
-     Query("select\n        l_returnflag,\n        l_linestatus,\n        sum(l_quantity) as " +
+/*/*    Query("select * from lineitem","","")*/
+
+  Query("select o_custkey, count(*) from orders group by o_custkey ","","")*/
+
+  Query("select\n        l_returnflag,\n        l_linestatus,\n        sum(l_quantity) as " +
             "sum_qty,\n        sum(l_extendedprice) as sum_base_price,\n        sum(l_extendedprice" +
             " * (1 - l_discount)) as sum_disc_price,\n        sum(l_extendedprice * (1 - " +
             "l_discount) * (1 + l_tax)) as sum_charge,\n        avg(l_quantity) as avg_qty,\n      " +
@@ -32,7 +36,7 @@ object BenchMarkingUtil {
             "cast('1998-09-16' as timestamp)\ngroup by\n        l_returnflag,\n        l_linestatus\norder by\n       " +
             " l_returnflag,\n        l_linestatus","",""),
 
-      Query("select\n        l_orderkey,\n        sum(l_extendedprice * (1 - l_discount)) as " +
+     Query("select\n        l_orderkey,\n        sum(l_extendedprice * (1 - l_discount)) as " +
             "revenue,\n        o_orderdate,\n        o_shippriority\nfrom\n        customer,\n     " +
             "   orders,\n        lineitem\nwhere\n        c_mktsegment = 'BUILDING'\n        and " +
             "c_custkey = o_custkey\n        and l_orderkey = o_orderkey\n        and o_orderdate < " +

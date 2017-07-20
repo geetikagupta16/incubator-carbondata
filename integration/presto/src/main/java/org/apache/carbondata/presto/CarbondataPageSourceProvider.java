@@ -45,6 +45,7 @@ public class CarbondataPageSourceProvider implements ConnectorPageSourceProvider
   @Override
   public ConnectorPageSource createPageSource(ConnectorTransactionHandle transactionHandle,
       ConnectorSession session, ConnectorSplit split, List<ColumnHandle> columns) {
+
     return new CarbondataPageSource(carbondataRecordSetProvider.getRecordSet(transactionHandle, session, split, columns));
   }
 }

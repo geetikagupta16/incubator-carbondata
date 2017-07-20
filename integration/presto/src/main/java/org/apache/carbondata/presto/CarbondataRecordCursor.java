@@ -30,7 +30,15 @@ import com.google.common.base.Strings;
 import io.airlift.log.Logger;
 import io.airlift.slice.Slice;
 import io.airlift.slice.Slices;
+import scala.Array;
+import scala.Int;
+import scala.Tuple3;
+import scala.collection.JavaConverters.*;
+
 import org.apache.carbondata.common.CarbonIterator;
+import org.apache.carbondata.core.cache.dictionary.Dictionary;
+import org.apache.carbondata.core.metadata.datatype.DataType;
+import org.apache.carbondata.hadoop.DictionaryDecodeReaderSupport2;
 import org.apache.carbondata.hadoop.readsupport.CarbonReadSupport;
 
 
@@ -42,6 +50,7 @@ import java.util.List;
 
 
 import static com.facebook.presto.spi.type.BooleanType.BOOLEAN;
+import static com.facebook.presto.spi.type.Decimals.encodeScaledValue;
 import static com.facebook.presto.spi.type.Decimals.isShortDecimal;
 import static com.facebook.presto.spi.type.Decimals.rescale;
 import static com.facebook.presto.spi.type.DoubleType.DOUBLE;
@@ -58,19 +67,21 @@ public class CarbondataRecordCursor implements RecordCursor {
   private List<String> fields;
   private CarbondataSplit split;
   private CarbonIterator<Object[]> rowCursor;
-  private CarbonReadSupport<Object[]> readSupport;
+  private DictionaryDecodeReaderSupport2 readSupport;
+  private Tuple3<DataType,Dictionary,Int>[] dictionary;
 
   private long totalBytes;
   private long nanoStart;
   private long nanoEnd;
 
-  public CarbondataRecordCursor(CarbonReadSupport<Object[]> readSupport,
+  public CarbondataRecordCursor(DictionaryDecodeReaderSupport2 readSupport,
       CarbonIterator<Object[]> carbonIterator, List<CarbondataColumnHandle> columnHandles,
-      CarbondataSplit split) {
+      CarbondataSplit split, Tuple3<DataType,Dictionary,Int>[] dictionaries ) {
     this.rowCursor = carbonIterator;
     this.columnHandles = columnHandles;
     this.readSupport = readSupport;
     this.totalBytes = 0;
+    this.dictionary=dictionaries;
   }
 
   @Override public long getTotalBytes() {
@@ -100,8 +111,9 @@ public class CarbondataRecordCursor implements RecordCursor {
       nanoStart = System.nanoTime();
     }
 
+
     if (rowCursor.hasNext()) {
-      Object[] columns = readSupport.readRow(rowCursor.next());
+      Object[] columns = readSupport.readRow(rowCursor.next(),dictionary);
       fields = new ArrayList<String>();
       if(columns != null && columns.length > 0)
       {

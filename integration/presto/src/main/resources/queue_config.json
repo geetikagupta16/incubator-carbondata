@@ -1,0 +1,30 @@
+{
+  "queues": {
+    "admin": {
+      "maxConcurrent": 100,
+      "maxQueued": 100
+    },
+    "user.${USER}": {
+      "maxConcurrent": 5,
+      "maxQueued": 20
+    },
+    "global": {
+      "maxConcurrent": 100,
+      "maxQueued": 1000
+    }
+  },
+  "rules": [
+    {
+      "source": "presto-query",
+      "queues": [
+        "admin"
+      ]
+    },
+    {
+      "queues": [
+        "user.${USER}",
+        "global"
+      ]
+    }
+  ]
+}

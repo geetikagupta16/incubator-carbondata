@@ -48,18 +48,21 @@ import static java.util.Objects.requireNonNull;
  */
 public class CarbondataPageSource implements ConnectorPageSource {
 
-  private static final int ROWS_PER_REQUEST = 4096;
+  private static final int ROWS_PER_REQUEST = 40960;
   private final RecordCursor cursor;
   private final List<Type> types;
   private final PageBuilder pageBuilder;
   private boolean closed;
   private final char[] buffer = new char[100];
- /* long startTime = 0;
-  long stopTime = 0;*/
+  double startTime = 0;
+  double stopTime = 0;
+  double sum=0;
+  static int count =0;
   private Block[] blocks;
 
   public CarbondataPageSource(RecordSet recordSet) {
     this(requireNonNull(recordSet, "recordSet is null").getColumnTypes(), recordSet.cursor());
+    count=count+1;
   }
 
   public CarbondataPageSource(List<Type> types, RecordCursor cursor) {
@@ -95,9 +98,12 @@ public class CarbondataPageSource implements ConnectorPageSource {
 
   @Override
   public Page getNextPage() {
+    count=count+1;
+   // sum=0;
+  //  System.out.println("\nIn page (start) : " + count);
 
- /*   startTime = System.currentTimeMillis();
-    if (stopTime != 0) {
+    startTime = System.currentTimeMillis();
+   /* if (stopTime != 0) {
       //      System.out.println("carbondataPageSource : ---------> Time for get next page " + (startTime - stopTime));
     }*/
     if (!closed) {
@@ -147,11 +153,18 @@ public class CarbondataPageSource implements ConnectorPageSource {
 
     // only return a page if the buffer is full or we are finishing
     if (pageBuilder.isEmpty() || (!closed && !pageBuilder.isFull())) {
+   //   System.out.println("\n\n Returning null : " + count);
+    /*  stopTime = System.currentTimeMillis();
+      sum+=(stopTime-startTime)/1000;*/
       return null;
     }
     Page page = new Page(blocks[0].getPositionCount(), blocks)/*pageBuilder.build()*/;
     pageBuilder.reset();
-    //stopTime = System.currentTimeMillis();
+    stopTime = System.currentTimeMillis();
+
+    sum+=(stopTime-startTime)/1000;
+//    System.out.println("Total cumulative time in processing splits :"+sum);
+ //   System.out.println("\nIn page (end) : " + count);
     return page;
   }
 

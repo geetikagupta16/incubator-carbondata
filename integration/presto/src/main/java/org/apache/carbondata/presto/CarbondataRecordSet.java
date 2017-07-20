@@ -21,6 +21,10 @@ import com.facebook.presto.spi.*;
 import com.facebook.presto.spi.predicate.TupleDomain;
 import com.facebook.presto.spi.type.Type;
 import org.apache.carbondata.common.CarbonIterator;
+import org.apache.carbondata.core.cache.dictionary.ColumnDictionaryInfo;
+import org.apache.carbondata.core.cache.dictionary.Dictionary;
+import org.apache.carbondata.core.cache.dictionary.ForwardDictionary;
+import org.apache.carbondata.core.cache.dictionary.ForwardDictionaryCache;
 import org.apache.carbondata.core.datastore.block.BlockletInfos;
 import org.apache.carbondata.core.datastore.block.TableBlockInfo;
 import org.apache.carbondata.core.metadata.ColumnarFormatVersion;
@@ -33,8 +37,12 @@ import org.apache.carbondata.core.scan.model.QueryModel;
 import org.apache.carbondata.core.scan.result.BatchResult;
 import org.apache.carbondata.core.scan.result.iterator.ChunkRowIterator;
 import org.apache.carbondata.hadoop.readsupport.CarbonReadSupport;
-import org.apache.carbondata.hadoop.readsupport.impl.DictionaryDecodeReadSupport;
+import org.apache.carbondata.hadoop.DictionaryDecodeReaderSupport2;
+import org.apache.carbondata.core.metadata.datatype.DataType;
 //import org.apache.carbondata.hadoop.readsupport.impl.DictionaryDecodedReadSupportImpl;
+import scala.Int;
+import scala.Tuple3;
+import scala.collection.JavaConverters.*;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -53,7 +61,7 @@ public class CarbondataRecordSet implements RecordSet {
   private List<CarbondataColumnHandle> columns;
   private QueryExecutor queryExecutor;
 
-  private CarbonReadSupport<Object[]> readSupport;
+  private DictionaryDecodeReaderSupport2 readSupport;
 
   public CarbondataRecordSet(CarbonTable carbonTable, ConnectorSession session,
       ConnectorSplit split, List<CarbondataColumnHandle> columns, QueryModel queryModel) {
@@ -63,7 +71,7 @@ public class CarbondataRecordSet implements RecordSet {
     this.rebuildConstraints = this.split.getRebuildConstraints();
     this.queryModel = queryModel;
     this.columns = columns;
-    this.readSupport = new DictionaryDecodeReadSupport();
+    this.readSupport = new DictionaryDecodeReaderSupport2();
   }
 
   //todo support later
@@ -93,11 +101,12 @@ public class CarbondataRecordSet implements RecordSet {
 
     //queryModel.setQueryId(queryModel.getQueryId() + "_" + split.getLocalInputSplit().getSegmentId());
     try {
-      readSupport
-          .initialize(queryModel.getProjectionColumns(), queryModel.getAbsoluteTableIdentifier());
+     // Tuple3<DataType, Dictionary, Int> dict = new Tuple3(DataType.ARRAY, new ForwardDictionary(new ColumnDictionaryInfo(DataType.ARRAY)),1);
+      Tuple3[] dict= readSupport.initialize(queryModel.getProjectionColumns(), queryModel.getAbsoluteTableIdentifier());
       CarbonIterator<Object[]> carbonIterator =
           new ChunkRowIterator((CarbonIterator<BatchResult>) queryExecutor.execute(queryModel));
-      RecordCursor rc = new CarbondataRecordCursor(readSupport, carbonIterator, columns, split);
+     //readSupport.readRow(carbonIterator.next(), dict);
+      RecordCursor rc = new CarbondataRecordCursor(readSupport, carbonIterator, columns, split,dict);
       return rc;
     } catch (QueryExecutionException e) {
        throw new RuntimeException(e.getMessage(), e);

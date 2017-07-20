@@ -103,6 +103,7 @@
     <module>integration/spark-common-test</module>
     <module>assembly</module>
     <module>examples/flink</module>
+    <module>integration/presto</module>
 
   </modules>
 
@@ -311,7 +312,6 @@
         <module>integration/spark2</module>
         <module>examples/spark2</module>
         <module>integration/hive</module>
-        <module>integration/presto</module>
       </modules>
     </profile>
     <profile>
@@ -364,7 +364,7 @@
       <modules>
         <module>integration/spark2</module>
         <module>integration/hive</module>
-        <module>integration/presto</module>
+
         <module>examples/spark2</module>
       </modules>
     </profile>

@@ -101,13 +101,19 @@ public class CarbondataSplitManager implements ConnectorSplitManager {
 
     if (cache != null) {
       try {
+       double startTime=System.currentTimeMillis();
         List<CarbonLocalInputSplit> splits = carbonTableReader.getInputSplits2(cache, filters);
+        double stopTime=System.currentTimeMillis();
+      //  System.out.println("------- Time to get Split Array time : "+((stopTime-startTime)/1000));
 
         ImmutableList.Builder<ConnectorSplit> cSplits = ImmutableList.builder();
         for (CarbonLocalInputSplit split : splits) {
           cSplits.add(new CarbondataSplit(connectorId, tableHandle.getSchemaTableName(),
               layoutHandle.getConstraint(), split, rebuildConstraints));
         }
+        stopTime=System.currentTimeMillis();
+
+       // System.out.println("------- Split Creation time : "+((stopTime-startTime)/1000));
         return new FixedSplitSource(cSplits.build());
       } catch (Exception ex) {
         System.out.println(ex.toString());

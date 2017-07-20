@@ -212,6 +212,7 @@ object CarbonDataPerformance {
     spark.sql("SELECT * FROM LINEITEM").show()
     spark.sql("drop table if exists q18_large_volume_customer_cached").show()
 
+/*
     Try {
       QueryUtil.evaluateTimeForQuery(queryList, spark)
     } match {
@@ -229,6 +230,7 @@ object CarbonDataPerformance {
         exception.printStackTrace()
         println(" Exception occured " + exception.getMessage)
     }
+*/
 
     spark.stop()
     System.exit(0)

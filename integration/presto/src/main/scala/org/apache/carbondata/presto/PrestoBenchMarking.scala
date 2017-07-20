@@ -43,7 +43,7 @@ object PrestoBenchMarking {
   // Instantiates the Presto Server to connect with the Apache CarbonData
   @throws[Exception]
   def createQueryRunner(extraProperties: util.Map[String, String]): DistributedQueryRunner = {
-    val queryRunner = new DistributedQueryRunner(createSession, 4, extraProperties)
+    val queryRunner = new DistributedQueryRunner(createSession, 2, extraProperties)
     try {
       queryRunner.installPlugin(new CarbondataPlugin)
       val carbonProperties = ImmutableMap.builder[String, String]
@@ -79,12 +79,14 @@ object PrestoBenchMarking {
 
     import scala.collection.JavaConverters._
 
-    val prestoProperties: util.Map[String, String] = Map(("http-server.http.port", "8086")).asJava
+    val prestoProperties: util.Map[String, String] = Map(("http-server.http.port", "8086")
+    /*  ("query.queue-config-file","integration/presto/src/main/resources/queue_config.json")/*,*/
+      ("task.concurrency","4")*/).asJava
 
     logger.info("======== STARTING PRESTO SERVER ========")
     val queryRunner: DistributedQueryRunner = createQueryRunner(
       prestoProperties)
-    /*    val queryRunner: DistributedQueryRunner = createQueryRunner(
+       /* val queryRunner: DistributedQueryRunner = createQueryRunner(
           ImmutableMap.of("http-server.http.port", "8086"))*/
     Thread.sleep(10)
     logger.info("STARTED SERVER AT :" + queryRunner.getCoordinator.getBaseUrl)
@@ -103,20 +105,22 @@ object PrestoBenchMarking {
       Class.forName(JDBC_DRIVER)
       // STEP 3: Open a connection
       val conn: Connection = DriverManager.getConnection(DB_URL, USER, PASS)
+      conn.setClientInfo("ApplicationName","presto-query")
       val stmt: Statement = conn.createStatement
 
       val executionTime: Array[Double] = BenchMarkingUtil.queries.map { queries =>
-
+       var list:List[Int]= List()
+        var i = 0
         val time = BenchMarkingUtil.time {
           val res: ResultSet = stmt.executeQuery(queries.sqlText)
 
-          var i = 0
+          //val startTime=System.currentTimeMillis()
           while (res.next()) {
-            /* println(/*res.getString("l_returnflag") +*/ "------" + i)*/
+            //res.getString("o_custkey")
             i = i + 1
           }
-          println("row count ----" + i)
         }
+        //println("row count ----" + i + "  Time :" + time)
         time
       }
       conn.close()
@@ -146,10 +150,10 @@ object PrestoBenchMarking {
       (BenchMarkingUtil.queries, y).zipped foreach { (query, time) =>
 
         println(">>>>>>QUERY EXECUTION TIME " + time)
-        util.writeResults(s"\n$time",prestoFile)
-          /* util.writeResults(" [ Query :" + query + "\n"
-                             + "Time :" + time + " ] \n\n "
-             , prestoFile)*/
+        util.writeResults(s"\n$time", prestoFile)
+        /* util.writeResults(" [ Query :" + query + "\n"
+                           + "Time :" + time + " ] \n\n "
+           , prestoFile)*/
       }
     }
     // scalastyle:off

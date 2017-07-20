@@ -71,6 +71,7 @@ public class DictionaryDecodeReadSupport<T> implements CarbonReadSupport<T> {
     }
   }
 
+
   @Override public T readRow(Object[] data) {
     assert (data.length == dictionaries.length);
     for (int i = 0; i < dictionaries.length; i++) {
