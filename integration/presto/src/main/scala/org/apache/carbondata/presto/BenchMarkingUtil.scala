@@ -23,9 +23,9 @@ object BenchMarkingUtil {
 
   val queries: Array[Query] = Array(
 
-/*/*    Query("select * from lineitem","","")*/
+//   Query("select * from lineitem","","")
 
-  Query("select o_custkey, count(*) from orders group by o_custkey ","","")*/
+ /* Query("select o_custkey, count(*) from orders group by o_custkey ","","")*/
 
   Query("select\n        l_returnflag,\n        l_linestatus,\n        sum(l_quantity) as " +
             "sum_qty,\n        sum(l_extendedprice) as sum_base_price,\n        sum(l_extendedprice" +

@@ -14,17 +14,13 @@ class DictionaryDecodeReaderSupport2[T] {
   def initialize(carbonColumns: Array[CarbonColumn],
       absoluteTableIdentifier: AbsoluteTableIdentifier): Array[(DataType, Dictionary, Int)] = {
 
-    carbonColumns.zipWithIndex.map { case (carbonColumn: CarbonColumn, index: Int) =>
-     /* carbonColumn match {
-        case carbonColumn */if (dictChecker(carbonColumn)){
+    carbonColumns.zipWithIndex.filter(dictChecker(_)).map {carbonColumnWithIndex =>
+      val (carbonColumn, index) = carbonColumnWithIndex
           val forwardDictionaryCache: Cache[DictionaryColumnUniqueIdentifier, Dictionary] =
             CacheProvider.getInstance().createCache(CacheType.FORWARD_DICTIONARY, absoluteTableIdentifier
             .getStorePath)
-
           val dict: Dictionary =forwardDictionaryCache.get(new DictionaryColumnUniqueIdentifier(absoluteTableIdentifier.getCarbonTableIdentifier, carbonColumn.getColumnIdentifier, carbonColumn.getDataType))
-
           (carbonColumn.getDataType,dict, index)
-      }
     }
   }
 
@@ -36,7 +32,8 @@ class DictionaryDecodeReaderSupport2[T] {
     data
   }
 
-  private def dictChecker(carbonColumn: CarbonColumn): Boolean = {
+  private def dictChecker(carbonColumWithIndex: (CarbonColumn, Int)): Boolean = {
+    val (carbonColumn, _) = carbonColumWithIndex
     if (!carbonColumn.hasEncoding(Encoding.DIRECT_DICTIONARY) && !carbonColumn.isComplex &&
         carbonColumn.hasEncoding(Encoding.DICTIONARY)) {
       true
@@ -44,7 +41,4 @@ class DictionaryDecodeReaderSupport2[T] {
       false
     }
   }
-
-
-
 }
