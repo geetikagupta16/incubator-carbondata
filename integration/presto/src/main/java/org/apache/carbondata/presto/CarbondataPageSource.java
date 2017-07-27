@@ -72,130 +72,92 @@ public class CarbondataPageSource implements ConnectorPageSource {
   private org.apache.carbondata.presto.impl.PrestoDictionaryDecodeReadSupport<Object[]> readSupport;
   private Block[] blocks;
 
-  public CarbondataPageSource(RecordSet recordSet)
-  {
+  public CarbondataPageSource(RecordSet recordSet) {
     this(requireNonNull(recordSet, "recordSet is null").getColumnTypes(), recordSet.cursor());
   }
 
-  public CarbondataPageSource(List<Type> types, RecordCursor cursor)
-  {
+  public CarbondataPageSource(List<Type> types, RecordCursor cursor) {
     this.cursor = requireNonNull(cursor, "cursor is null");
     this.types = unmodifiableList(new ArrayList<>(requireNonNull(types, "types is null")));
     this.pageBuilder = new PageBuilder(this.types);
-    this.columnCursor = ((CarbondataRecordCursor)cursor).getColumnCursor();
-    this.readSupport = ((CarbondataRecordCursor)cursor).getReadSupport();
+    this.columnCursor = ((CarbondataRecordCursor) cursor).getColumnCursor();
+    this.readSupport = ((CarbondataRecordCursor) cursor).getReadSupport();
     this.blocks = new Block[types.size()];
   }
 
-  public RecordCursor getCursor()
-  {
+  public RecordCursor getCursor() {
     return cursor;
   }
 
-  @Override public long getTotalBytes() {
+  @Override
+  public long getTotalBytes() {
     return cursor.getTotalBytes();
   }
 
-  @Override public long getCompletedBytes() {
+  @Override
+  public long getCompletedBytes() {
     return cursor.getCompletedBytes();
   }
 
-  @Override public long getReadTimeNanos() {
+  @Override
+  public long getReadTimeNanos() {
     return cursor.getReadTimeNanos();
   }
 
-  @Override public boolean isFinished() {
+  @Override
+  public boolean isFinished() {
     return closed && pageBuilder.isEmpty();
   }
 
-  @Override public Page getNextPage() {
+  @Override
+  public Page getNextPage() {
     BatchResult columnBatch;
     List<Object[]> columnData;
-
+    blocks = new Block[types.size()];
+    int batchSize = 0;
     if (!closed) {
-      int i;
-      for (i = 0; i < ROWS_PER_REQUEST; i++) {
-        if (pageBuilder.isFull()) {
-          break;
-        }
-        if (!columnCursor.hasNext() ) {
+        if (!columnCursor.hasNext()) {
           closed = true;
-          break;
-        }
-        else {
-          columnBatch =  columnCursor.next();
+        } else {
+          columnBatch = columnCursor.next();
           columnData = columnBatch.getRows();
-        }
-        for (int column = 0; column < types.size(); column++) {
-          BlockBuilder output = pageBuilder.getBlockBuilder(column);
-          Object[] data = readSupport.convertColumn(columnData.get(column), column);
-          Type type = types.get(column);
-          Class<?> javaType = type.getJavaType();
-          if(data != null) {
-            for(Object value : data){
-              if(column == 0) {
-                pageBuilder.declarePosition();
-              }
-              if(value == null) {
-                output.appendNull();
-              } else {
-                if (javaType == boolean.class) {
-                  type.writeBoolean(output, getBoolean(value));
-                } else if (javaType == long.class) {
-                  type.writeLong(output, getLong(value, type));
-                } else if (javaType == double.class) {
-                  type.writeDouble(output, getDouble(value));
-                } else if (javaType == Slice.class) {
-                  Slice slice = getSlice(value, type);
-                  if (type instanceof DecimalType) {
-                    if (isShortDecimal(type)) {
-                      type.writeLong(output, parseLong((DecimalType) type, slice, 0, slice.length()));
-                    } else {
-                      type.writeSlice(output, parseSlice((DecimalType) type, slice, 0, slice.length()));
-                    }
-                  } else {
-                    type.writeSlice(output, slice, 0, slice.length());
-                  }
-                } else {
-                  type.writeObject(output, cursor.getObject(column));
-                }
-              }
-              blocks[column] = new LazyBlock(output.getPositionCount(),
-                      new CarbonBlockLoader(output.build(), types.get(column)));
-            }
+          for (int column = 0; column < types.size(); column++) {
+            BlockBuilder output = pageBuilder.getBlockBuilder(column);
+            Object[] data = readSupport.convertColumn(columnData.get(column), column);
+            batchSize = data.length;
+            blocks[column] = new LazyBlock(data.length, new CarbonBlockLoader(types.get(column), column, data, output));
+          }
+
+          if (types.size() == 0) {
+            Object[] data = columnData.get(0);
+            pageBuilder.declarePositions(data.length);
+            System.out.println("Number of Rows in PageSource " + data.length);
           }
         }
-
-        if(types.size() == 0) {
-          Object[] data = columnData.get(0);
-          pageBuilder.declarePositions(data.length);
-          System.out.println("Number of Rows in PageSource " + data.length);
-        }
-      }
     }
 
     // only return a page if the buffer is full or we are finishing
-    if (pageBuilder.isEmpty() || (!closed && !pageBuilder.isFull())) {
+    if (closed) {
       return null;
     }
     Page page;
     if (blocks != null && blocks.length > 0) {
-      page = new Page(blocks[0].getPositionCount(), blocks);
+      page = new Page(batchSize, blocks);
     } else {
       page = pageBuilder.build();
     }
-
-
     pageBuilder.reset();
     return page;
- }
+  }
 
 
-  @Override public long getSystemMemoryUsage() {
+  @Override
+  public long getSystemMemoryUsage() {
     return cursor.getSystemMemoryUsage() + pageBuilder.getSizeInBytes();
   }
 
-  @Override public void close() throws IOException {
+  @Override
+  public void close() throws IOException {
     // some hive input formats are broken and bad things can happen if you close them multiple times
     if (closed) {
       return;
@@ -205,30 +167,25 @@ public class CarbondataPageSource implements ConnectorPageSource {
     try {
       columnCursor.close();
       cursor.close();
-    }
-    catch (Exception e) {
+    } catch (Exception e) {
       throw Throwables.propagate(e);
     }
 
 
-
   }
 
-  private long parseLong(DecimalType type, Slice slice, int offset, int length)
-  {
+  private long parseLong(DecimalType type, Slice slice, int offset, int length) {
     BigDecimal decimal = parseBigDecimal(type, slice, offset, length);
     return decimal.unscaledValue().longValue();
   }
 
 
-  private Slice parseSlice(DecimalType type, Slice slice, int offset, int length)
-  {
+  private Slice parseSlice(DecimalType type, Slice slice, int offset, int length) {
     BigDecimal decimal = parseBigDecimal(type, slice, offset, length);
     return encodeUnscaledValue(decimal.unscaledValue());
   }
 
-  private BigDecimal parseBigDecimal(DecimalType type, Slice slice, int offset, int length)
-  {
+  private BigDecimal parseBigDecimal(DecimalType type, Slice slice, int offset, int length) {
     checkArgument(length < buffer.length);
     for (int i = 0; i < length; i++) {
       buffer[i] = (char) slice.getByte(offset + i);
@@ -240,31 +197,31 @@ public class CarbondataPageSource implements ConnectorPageSource {
     return decimal;
   }
 
-   public boolean getBoolean(Object value) {
-    return (Boolean)value;
+  public boolean getBoolean(Object value) {
+    return (Boolean) value;
   }
 
   public long getLong(Object obj, Type actual) {
     Long timeStr = 0L;
-    if( obj instanceof  Integer ){
-      timeStr = ((Integer)obj).longValue();
-    } else if( obj instanceof Long ) {
-      timeStr = (Long)obj;
+    if (obj instanceof Integer) {
+      timeStr = ((Integer) obj).longValue();
+    } else if (obj instanceof Long) {
+      timeStr = (Long) obj;
     } else {
       timeStr = Math.round(Double.parseDouble(obj.toString()));
     }
-    if(actual instanceof TimestampType){
-      return new Timestamp(timeStr).getTime()/1000;
+    if (actual instanceof TimestampType) {
+      return new Timestamp(timeStr).getTime() / 1000;
     }
     //suppose the
     return timeStr;
   }
 
-  public double getDouble(Object  value) {
-    return (Double)value;
+  public double getDouble(Object value) {
+    return (Double) value;
   }
 
- public Slice getSlice(Object value, Type type) {
+  public Slice getSlice(Object value, Type type) {
     Type decimalType = type;
     if (decimalType instanceof DecimalType) {
       DecimalType actual = (DecimalType) decimalType;
@@ -281,14 +238,14 @@ public class CarbondataPageSource implements ConnectorPageSource {
       } else {
         if (bigDecimalValue.scale() > actual.getScale()) {
           BigInteger unscaledDecimal =
-              rescale(bigDecimalValue.unscaledValue(), bigDecimalValue.scale(),
-                  bigDecimalValue.scale());
+                  rescale(bigDecimalValue.unscaledValue(), bigDecimalValue.scale(),
+                          bigDecimalValue.scale());
           Slice decimalSlice = Decimals.encodeUnscaledValue(unscaledDecimal);
           return utf8Slice(Decimals.toString(decimalSlice, actual.getScale()));
           //return decimalSlice;
         } else {
           BigInteger unscaledDecimal =
-              rescale(bigDecimalValue.unscaledValue(), bigDecimalValue.scale(), actual.getScale());
+                  rescale(bigDecimalValue.unscaledValue(), bigDecimalValue.scale(), actual.getScale());
           Slice decimalSlice = Decimals.encodeUnscaledValue(unscaledDecimal);
           return utf8Slice(Decimals.toString(decimalSlice, actual.getScale()));
           //return decimalSlice;
@@ -301,7 +258,7 @@ public class CarbondataPageSource implements ConnectorPageSource {
     }
   }
 
-   public Object getObject(Object value) {
+  public Object getObject(Object value) {
     return value;
   }
 
@@ -317,18 +274,58 @@ public class CarbondataPageSource implements ConnectorPageSource {
     private boolean loaded;
     private Block dataBlock;
     private Type type;
+    int colIndex;
+    Object[] data;
+    BlockBuilder output;
 
-    public CarbonBlockLoader(Block dataBlock, Type type) {
+    public CarbonBlockLoader(Type type, int colIndex, Object[] data, BlockBuilder output) {
       this.dataBlock = dataBlock;
       this.type = type;
+      this.colIndex = colIndex;
+      this.data = data;
+      this.output = output;
     }
 
-    @Override public void load(LazyBlock block) {
+    @Override
+    public void load(LazyBlock block) {
       if (loaded) {
         return;
       }
-      block.setBlock(dataBlock);
-      loaded = true;
+
+      Class<?> javaType = type.getJavaType();
+      if (data != null) {
+        for (Object value : data) {
+          /*if(column == 0) {
+            pageBuilder.declarePosition();
+          }*/
+          if (value == null) {
+            output.appendNull();
+          } else {
+            if (javaType == boolean.class) {
+              type.writeBoolean(output, getBoolean(value));
+            } else if (javaType == long.class) {
+              type.writeLong(output, getLong(value, type));
+            } else if (javaType == double.class) {
+              type.writeDouble(output, getDouble(value));
+            } else if (javaType == Slice.class) {
+              Slice slice = getSlice(value, type);
+              if (type instanceof DecimalType) {
+                if (isShortDecimal(type)) {
+                  type.writeLong(output, parseLong((DecimalType) type, slice, 0, slice.length()));
+                } else {
+                  type.writeSlice(output, parseSlice((DecimalType) type, slice, 0, slice.length()));
+                }
+              } else {
+                type.writeSlice(output, slice, 0, slice.length());
+              }
+            } else {
+              type.writeObject(output, cursor.getObject(colIndex));
+            }
+          }
+        }
+        block.setBlock(output.build());
+        loaded = true;
+      }
     }
   }
 }
