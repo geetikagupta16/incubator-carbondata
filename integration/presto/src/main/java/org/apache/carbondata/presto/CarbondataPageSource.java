@@ -24,6 +24,9 @@ import java.sql.Timestamp;
 import java.util.ArrayList;
 import java.util.List;
 
+import com.facebook.presto.spi.block.Block;
+import com.facebook.presto.spi.block.LazyBlock;
+import com.facebook.presto.spi.block.LazyBlockLoader;
 import org.apache.carbondata.common.CarbonIterator;
 import org.apache.carbondata.core.scan.result.BatchResult;
 import org.apache.carbondata.presto.impl.*;
@@ -67,6 +70,7 @@ public class CarbondataPageSource implements ConnectorPageSource {
   private final char[] buffer = new char[100];
   private CarbonIterator<BatchResult> columnCursor;
   private org.apache.carbondata.presto.impl.PrestoDictionaryDecodeReadSupport<Object[]> readSupport;
+  private Block[] blocks;
 
   public CarbondataPageSource(RecordSet recordSet)
   {
@@ -80,6 +84,7 @@ public class CarbondataPageSource implements ConnectorPageSource {
     this.pageBuilder = new PageBuilder(this.types);
     this.columnCursor = ((CarbondataRecordCursor)cursor).getColumnCursor();
     this.readSupport = ((CarbondataRecordCursor)cursor).getReadSupport();
+    this.blocks = new Block[types.size()];
   }
 
   public RecordCursor getCursor()
@@ -155,7 +160,8 @@ public class CarbondataPageSource implements ConnectorPageSource {
                   type.writeObject(output, cursor.getObject(column));
                 }
               }
-
+              blocks[column] = new LazyBlock(output.getPositionCount(),
+                      new CarbonBlockLoader(output.build(), types.get(column)));
             }
           }
         }
@@ -172,7 +178,14 @@ public class CarbondataPageSource implements ConnectorPageSource {
     if (pageBuilder.isEmpty() || (!closed && !pageBuilder.isFull())) {
       return null;
     }
-    Page page = pageBuilder.build();
+    Page page;
+    if (blocks != null && blocks.length > 0) {
+      page = new Page(blocks[0].getPositionCount(), blocks);
+    } else {
+      page = pageBuilder.build();
+    }
+
+
     pageBuilder.reset();
     return page;
  }
@@ -297,4 +310,25 @@ public class CarbondataPageSource implements ConnectorPageSource {
     return value == null;
   }
 
+  /**
+   * Using the LazyBlockLoader
+   */
+  private final class CarbonBlockLoader implements LazyBlockLoader<LazyBlock> {
+    private boolean loaded;
+    private Block dataBlock;
+    private Type type;
+
+    public CarbonBlockLoader(Block dataBlock, Type type) {
+      this.dataBlock = dataBlock;
+      this.type = type;
+    }
+
+    @Override public void load(LazyBlock block) {
+      if (loaded) {
+        return;
+      }
+      block.setBlock(dataBlock);
+      loaded = true;
+    }
+  }
 }
