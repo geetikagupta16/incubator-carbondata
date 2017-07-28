@@ -29,12 +29,11 @@ import io.airlift.slice.Slice;
 
 import org.apache.carbondata.common.CarbonIterator;
 import org.apache.carbondata.core.scan.result.BatchResult;
-import org.apache.carbondata.presto.impl.PrestoDictionaryDecodeReadSupport;
+import org.apache.carbondata.presto.PrestoDictionaryDecodeReadSupport;
 
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.sql.Timestamp;
-import java.util.ArrayList;
 import java.util.List;
 
 

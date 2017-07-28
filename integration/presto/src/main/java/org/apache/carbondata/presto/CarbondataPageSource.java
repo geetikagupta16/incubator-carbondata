@@ -29,7 +29,6 @@ import com.facebook.presto.spi.block.LazyBlock;
 import com.facebook.presto.spi.block.LazyBlockLoader;
 import org.apache.carbondata.common.CarbonIterator;
 import org.apache.carbondata.core.scan.result.BatchResult;
-import org.apache.carbondata.presto.impl.*;
 
 import com.facebook.presto.hadoop.$internal.com.google.common.base.Throwables;
 import com.facebook.presto.spi.ConnectorPageSource;
@@ -44,12 +43,9 @@ import com.facebook.presto.spi.type.TimestampType;
 import com.facebook.presto.spi.type.Type;
 import io.airlift.slice.Slice;
 
-import static com.facebook.presto.spi.type.BooleanType.BOOLEAN;
 import static com.facebook.presto.spi.type.Decimals.encodeUnscaledValue;
 import static com.facebook.presto.spi.type.Decimals.isShortDecimal;
 import static com.facebook.presto.spi.type.Decimals.rescale;
-import static com.facebook.presto.spi.type.DoubleType.DOUBLE;
-import static com.facebook.presto.spi.type.VarcharType.VARCHAR;
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkState;
 import static io.airlift.slice.Slices.utf8Slice;
@@ -69,7 +65,7 @@ public class CarbondataPageSource implements ConnectorPageSource {
   private boolean closed;
   private final char[] buffer = new char[100];
   private CarbonIterator<BatchResult> columnCursor;
-  private org.apache.carbondata.presto.impl.PrestoDictionaryDecodeReadSupport<Object[]> readSupport;
+  private PrestoDictionaryDecodeReadSupport<Object[]> readSupport;
   private Block[] blocks;
 
   public CarbondataPageSource(RecordSet recordSet) {
@@ -121,17 +117,17 @@ public class CarbondataPageSource implements ConnectorPageSource {
         } else {
           columnBatch = columnCursor.next();
           columnData = columnBatch.getRows();
-          for (int column = 0; column < types.size(); column++) {
-            BlockBuilder output = pageBuilder.getBlockBuilder(column);
-            Object[] data = readSupport.convertColumn(columnData.get(column), column);
-            batchSize = data.length;
-            blocks[column] = new LazyBlock(data.length, new CarbonBlockLoader(types.get(column), column, data, output));
-          }
-
           if (types.size() == 0) {
             Object[] data = columnData.get(0);
             pageBuilder.declarePositions(data.length);
-            System.out.println("Number of Rows in PageSource " + data.length);
+          } else {
+            pageBuilder.declarePosition();
+            for (int column = 0; column < types.size(); column++) {
+              BlockBuilder output = pageBuilder.getBlockBuilder(column);
+              Object[] data = readSupport.convertColumn(columnData.get(column), column);
+              batchSize = data.length;
+              blocks[column] = new LazyBlock(data.length, new CarbonBlockLoader(types.get(column), column, data, output));
+            }
           }
         }
     }
@@ -272,14 +268,12 @@ public class CarbondataPageSource implements ConnectorPageSource {
    */
   private final class CarbonBlockLoader implements LazyBlockLoader<LazyBlock> {
     private boolean loaded;
-    private Block dataBlock;
     private Type type;
     int colIndex;
     Object[] data;
     BlockBuilder output;
 
     public CarbonBlockLoader(Type type, int colIndex, Object[] data, BlockBuilder output) {
-      this.dataBlock = dataBlock;
       this.type = type;
       this.colIndex = colIndex;
       this.data = data;
@@ -291,7 +285,6 @@ public class CarbondataPageSource implements ConnectorPageSource {
       if (loaded) {
         return;
       }
-
       Class<?> javaType = type.getJavaType();
       if (data != null) {
         for (Object value : data) {

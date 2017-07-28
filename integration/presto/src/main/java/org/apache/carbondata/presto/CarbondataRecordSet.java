@@ -35,7 +35,7 @@ import org.apache.carbondata.core.scan.model.QueryModel;
 import org.apache.carbondata.core.scan.result.BatchResult;
 import org.apache.carbondata.core.scan.result.iterator.ChunkRowIterator;
 import org.apache.carbondata.core.util.CarbonProperties;
-import org.apache.carbondata.presto.impl.PrestoDictionaryDecodeReadSupport;
+import org.apache.carbondata.presto.PrestoDictionaryDecodeReadSupport;
 
 import com.facebook.presto.spi.ColumnHandle;
 import com.facebook.presto.spi.ConnectorSession;
