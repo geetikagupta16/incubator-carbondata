@@ -161,7 +161,7 @@ public class CarbonTableReader {
    * this.carbonFileList.
    * @return
    */
-  public boolean updateCarbonFile() {
+  private boolean updateCarbonFile() {
     if (carbonFileList == null) {
       fileType = FileFactory.getFileType(config.getStorePath());
       try {
@@ -177,7 +177,7 @@ public class CarbonTableReader {
    * Return the schema names under a schema store path (this.carbonFileList).
    * @return
    */
-  public List<String> updateSchemaList() {
+  private List<String> updateSchemaList() {
     updateCarbonFile();
 
     if (carbonFileList != null) {
@@ -202,7 +202,7 @@ public class CarbonTableReader {
    * @param schemaName name of the schema
    * @return
    */
-  public Set<String> updateTableList(String schemaName) {
+  private Set<String> updateTableList(String schemaName) {
     List<CarbonFile> schema = Stream.of(carbonFileList.listFiles()).filter(a -> schemaName.equals(a.getName()))
         .collect(Collectors.toList());
     if (schema.size() > 0) {

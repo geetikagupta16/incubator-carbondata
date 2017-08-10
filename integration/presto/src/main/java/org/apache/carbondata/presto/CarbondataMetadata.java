@@ -58,7 +58,7 @@ public class CarbondataMetadata implements ConnectorMetadata {
     return listSchemaNamesInternal();
   }
 
-  public List<String> listSchemaNamesInternal() {
+  private List<String> listSchemaNamesInternal() {
     List<String> schemaNameList;
     try (ThreadContextClassLoader ignored = new ThreadContextClassLoader(classLoader)) {
       schemaNameList = carbonTableReader.getSchemaNames();
@@ -211,7 +211,7 @@ public class CarbondataMetadata implements ConnectorMetadata {
     return getTableMetadataInternal(table);
   }
 
-  public ConnectorTableMetadata getTableMetadataInternal(ConnectorTableHandle table) {
+  private ConnectorTableMetadata getTableMetadataInternal(ConnectorTableHandle table) {
     CarbondataTableHandle carbondataTableHandle =
         checkType(table, CarbondataTableHandle.class, "table");
     checkArgument(carbondataTableHandle.getConnectorId().equals(connectorId),
