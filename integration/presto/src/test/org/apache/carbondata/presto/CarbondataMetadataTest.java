@@ -177,6 +177,37 @@ public class CarbondataMetadataTest {
         assert (tableCols.get(new SchemaTableName("schema1", "tableName")).get(0).getType().equals(IntegerType.INTEGER));
     }
 
+    @Test(expected = SchemaNotFoundException.class)
+    public void listTableColumnsTestExceptionCase() {
+
+        new MockUp<CarbonTableReader>() {
+            @Mock
+            public CarbonTable getTable(SchemaTableName schemaTableName) {
+                return CarbonTable.buildFromTableInfo(getTableInfo(1000L));
+            }
+        };
+
+        new MockUp<CarbonTable>() {
+            @Mock
+            public List<CarbonColumn> getCreateOrderColumn(String tableName) {
+                List<CarbonColumn> carbonColumns = new ArrayList<CarbonColumn>();
+                ColumnSchema columnSchema = new ColumnSchema();
+                columnSchema.setDataType(DataType.INT);
+                columnSchema.setColumnName("id");
+                carbonColumns.add(new CarbonColumn(columnSchema, 0, 0));
+                return carbonColumns;
+            }
+        };
+
+        new MockUp<SchemaTableName>() {
+            @Mock public String getSchemaName() {
+                return "null";
+            }
+        };
+
+        carbondataMetadata.listTableColumns(connectorSession, new SchemaTablePrefix("schema1", "tableName"));
+    }
+
     @Test
     public void getColumnHandlesTest() {
 
@@ -191,6 +222,25 @@ public class CarbondataMetadataTest {
         assert (((CarbondataColumnHandle) columnHandleMap.get("imei")).getColumnType().equals(VarcharType.VARCHAR));
         assert (((CarbondataColumnHandle) columnHandleMap.get("id")).getColumnType().equals(IntegerType.INTEGER));
         assert (((CarbondataColumnHandle) columnHandleMap.get("imei")).getConnectorId().equals("connectorid"));
+    }
+
+    @Test(expected = SchemaNotFoundException.class)
+    public void getColumnHandlesTestExceptionCase() {
+
+        new MockUp<CarbonTableReader>() {
+            @Mock
+            public CarbonTable getTable(SchemaTableName schemaTableName) {
+                return CarbonTable.buildFromTableInfo(getTableInfo(1000L));
+            }
+        };
+
+        new MockUp<SchemaTableName>() {
+            @Mock public String getSchemaName() {
+                return "null";
+            }
+        };
+
+        carbondataMetadata.getColumnHandles(connectorSession, new CarbondataTableHandle("connectorId", new SchemaTableName("schema1", "table1")));
     }
 
     @Test
