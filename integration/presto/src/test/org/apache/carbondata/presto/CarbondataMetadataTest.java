@@ -258,7 +258,7 @@ public class CarbondataMetadataTest {
 
     }
 
-    @Test
+    /*@Test
     public void getTableLayoutsTest() {
         ColumnHandle columnHandle = new CarbondataColumnHandle("connectorid", "id", IntegerType.INTEGER, 0, 0, 0, true, 0, "1234567890", true, 0, 0);
         Set<ColumnHandle> columnHandles = new HashSet<>();
@@ -291,7 +291,7 @@ public class CarbondataMetadataTest {
         assert (((CarbondataTableLayoutHandle) connectorTableLayout.getHandle()).getConstraint().equals(columnHandleTupleDomain));
     }
 
-
+*/
     @Test
     public void getTableMetadataTest() {
 
