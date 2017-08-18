@@ -1,7 +1,7 @@
 package org.apache.carbondata.presto
 
 import java.io.File
-import java.sql.{Connection, DriverManager, ResultSet, SQLException}
+import java.sql.{Connection, DriverManager, ResultSet}
 import java.util
 import java.util.{Locale, Optional}
 
@@ -23,32 +23,6 @@ class PrestoServer {
   val CARBONDATA_STOREPATH = s"$rootPath/integration/presto/test/store"
   val CARBONDATA_SOURCE = "carbondata"
 
-  //@throws[Exception]
-  /* def main(args: Array[String]): Unit = {
-     val rootFilePath = s"$rootPath/integration/presto/data/"
-
-     System.gc()
-
-     val carbonStorePath = CARBONDATA_STOREPATH
-     prestoJdbcClient(carbonStorePath)
-    /* prestoJdbcClient(carbonStorePath).foreach { (x: Array[Double]) =>
-       val y: List[Double] = (x map { (z: Double) => z }).toList
-       (BenchMarkingUtil.queries, y).zipped foreach { (query, time) =>
-
-         println(">>>>>>QUERY EXECUTION TIME " + time)
-         // util.writeResults(s"\n$time",prestoFile)
-         util.writeResults(" [ Query :" + query + "\n"
-           + "Time :" + time + " ] \n\n "
-           , prestoFile)
-       }
-     }*/
-     // scalastyle:off
-     // util.readFromFile(prestoFile).foreach(line => println(line))
-     // scalastyle:on
-     System.exit(0)
-   }
- */
-  // Creates a JDBC Client to connect CarbonData to Presto
   @throws[Exception]
   def prestoJdbcClient(carbonStorePath: String) = {
     val logger: Logger = LoggerFactory.getLogger("Presto Server on CarbonData")
@@ -60,57 +34,8 @@ class PrestoServer {
     logger.info("======== STARTING PRESTO SERVER ========")
     val queryRunner: DistributedQueryRunner = createQueryRunner(
       prestoProperties, carbonStorePath)
-    /*    val queryRunner: DistributedQueryRunner = createQueryRunner(
-          ImmutableMap.of("http-server.http.port", "8086"))*/
-    Thread.sleep(10)
+
     logger.info("STARTED SERVER AT :" + queryRunner.getCoordinator.getBaseUrl)
-
-    // Step 1: Create Connection Strings
-    val JDBC_DRIVER = "com.facebook.presto.jdbc.PrestoDriver"
-    val DB_URL = "jdbc:presto://localhost:8086/carbondata/default"
-
-    // The database Credentials
-    val USER = "username"
-    val PASS = "password"
-    try {
-      logger.info("=============Connecting to database/table" +
-        "===============")
-      // STEP 2: Register JDBC driver
-      Class.forName(JDBC_DRIVER)
-      // STEP 3: Open a connection
-      val conn: Connection = DriverManager.getConnection(DB_URL, USER, PASS)
-      // val stmt: Statement = conn.createStatement
-
-      /* val executionTime: Array[(Query, util.List[util.Map[String, AnyRef]])] = BenchMarkingUtil.queries.map { queries =>
-           val res: ResultSet = stmt.executeQuery(queries.sqlText)
-         (queries,resultSetToList(res))
-         }*/
-      /*val colCount: Int = res.getMetaData.getColumnCount
-       val x = new Array[Any](res.getRow)
-        x.zipWithIndex.map { data =>
-          val (index, arrData) = data
-          if(res.next()) {
-            //println(res.getInt("count") + "------" + counter)
-            for (col <- 1 to colCount) {
-              val colData = res.getString(col)
-            }
-          }
-        }
-        println("row count ----" )
-      }*/
-
-
-      conn.close()
-    } catch {
-      case se: SQLException =>
-        // Handle errors for JDBC
-        logger.error(se.getMessage)
-        None
-      case e: Exception =>
-        // Handle errors for Class.forName
-        logger.error(e.getMessage)
-        None
-    }
   }
 
   // Instantiates the Presto Server to connect with the Apache CarbonData
@@ -144,6 +69,25 @@ class PrestoServer {
       .setUserAgent("agent").build
   }
 
+  def executeQuery(query: String): util.List[util.Map[String, AnyRef]] = {
+
+    // Creates a JDBC Client to connect CarbonData to Presto
+    val JDBC_DRIVER = "com.facebook.presto.jdbc.PrestoDriver"
+    val DB_URL = "jdbc:presto://localhost:8086/carbondata/testdb"
+
+    // The database Credentials
+    val USER = "username"
+    val PASS = "password"
+
+    // STEP 2: Register JDBC driver
+    Class.forName(JDBC_DRIVER)
+    // STEP 3: Open a connection
+    val conn: Connection = DriverManager.getConnection(DB_URL, USER, PASS)
+    val statement = conn.createStatement()
+    val result: ResultSet = statement.executeQuery(query)
+    resultSetToList(result)
+  }
+
   def resultSetToList(rs: ResultSet): util.List[util.Map[String, AnyRef]] = {
     val metaData = rs.getMetaData
     val columns = metaData.getColumnCount
@@ -152,13 +96,9 @@ class PrestoServer {
       val row = new util.HashMap[String, AnyRef](columns)
       var counter = 1
       while (counter <= columns) {
-        {
           row.put(metaData.getColumnName(counter), rs.getObject(counter))
-        }
-        {
-          counter += 1;
+          counter += 1
           counter
-        }
       }
       rows.add(row)
     }
