@@ -106,6 +106,14 @@ public class CarbonTableReader {
    */
   private ConcurrentHashMap<SchemaTableName, CarbonTableCacheModel> cc;
 
+  public CarbonFile getCarbonFileList() {
+    return carbonFileList;
+  }
+
+  public void setCarbonFileList(CarbonFile carbonFileList) {
+    this.carbonFileList = carbonFileList;
+  }
+
   @Inject public CarbonTableReader(CarbonTableConfig config) {
     this.config = requireNonNull(config, "CarbonTableConfig is null");
     this.cc = new ConcurrentHashMap<>();

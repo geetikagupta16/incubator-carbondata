@@ -28,6 +28,8 @@ import java.util.*;
 import java.util.function.Predicate;
 
 import static com.facebook.presto.spi.type.IntegerType.INTEGER;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 
 public class CarbondataMetadataTest {
 
@@ -84,26 +86,46 @@ public class CarbondataMetadataTest {
                 return tableNames;
             }
         };
+
+        new MockUp<CarbonTableReader>() {
+            @Mock
+            public CarbonTable getTable(SchemaTableName schemaTableName) {
+                return CarbonTable.buildFromTableInfo(getTableInfo(1000L));
+            }
+        };
+
+        new MockUp<CarbonTable>() {
+            @Mock
+            public List<CarbonColumn> getCreateOrderColumn(String tableName) {
+                List<CarbonColumn> carbonColumns = new ArrayList<CarbonColumn>();
+                ColumnSchema columnSchema = new ColumnSchema();
+                columnSchema.setDataType(DataType.INT);
+                columnSchema.setColumnName("id");
+                carbonColumns.add(new CarbonColumn(columnSchema, 0, 0));
+                return carbonColumns;
+            }
+        };
+
     }
 
     @Test
     public void listSchemaNamesTest() {
         List<String> schemaNames = carbondataMetadata.listSchemaNames(connectorSession);
-        assert (schemaNames.get(0).equals("schema1"));
+        assertEquals(schemaNames.get(0), "schema1");
     }
 
     @Test
     public void listTablesTestWhenSchemaNameNotNull() {
         List<SchemaTableName> tableNameList = carbondataMetadata.listTables(connectorSession, "schemaName");
-        assert (tableNameList.get(0).getTableName().equals("table1"));
-        assert (tableNameList.get(0).getSchemaName().equals("schemaname"));
+        assertEquals(tableNameList.get(0).getTableName(), "table1");
+        assertEquals(tableNameList.get(0).getSchemaName(), "schemaname");
     }
 
     @Test
     public void listTablesTestWhenSchemaNameIsNull() {
         List<SchemaTableName> tableNameList = carbondataMetadata.listTables(connectorSession, null);
-        assert (tableNameList.get(0).getTableName().equals("table1"));
-        assert (tableNameList.get(0).getSchemaName().equals("schema1"));
+        assertEquals(tableNameList.get(0).getTableName(), "table1");
+        assertEquals(tableNameList.get(0).getSchemaName(), "schema1");
     }
 
     private ColumnSchema getColumnarDimensionColumn() {
@@ -153,28 +175,9 @@ public class CarbondataMetadataTest {
     @Test
     public void listTableColumnsTest() {
 
-        new MockUp<CarbonTableReader>() {
-            @Mock
-            public CarbonTable getTable(SchemaTableName schemaTableName) {
-                return CarbonTable.buildFromTableInfo(getTableInfo(1000L));
-            }
-        };
-
-        new MockUp<CarbonTable>() {
-            @Mock
-            public List<CarbonColumn> getCreateOrderColumn(String tableName) {
-                List<CarbonColumn> carbonColumns = new ArrayList<CarbonColumn>();
-                ColumnSchema columnSchema = new ColumnSchema();
-                columnSchema.setDataType(DataType.INT);
-                columnSchema.setColumnName("id");
-                carbonColumns.add(new CarbonColumn(columnSchema, 0, 0));
-                return carbonColumns;
-            }
-        };
-
         Map<SchemaTableName, List<ColumnMetadata>> tableCols = carbondataMetadata.listTableColumns(connectorSession, new SchemaTablePrefix("schema1", "tableName"));
-        assert (tableCols.get(new SchemaTableName("schema1", "tableName")).get(0).getName().equals("id"));
-        assert (tableCols.get(new SchemaTableName("schema1", "tableName")).get(0).getType().equals(IntegerType.INTEGER));
+        assertEquals(tableCols.get(new SchemaTableName("schema1", "tableName")).get(0).getName(), "id");
+        assertEquals(tableCols.get(new SchemaTableName("schema1", "tableName")).get(0).getType(), IntegerType.INTEGER);
     }
 
     @Test(expected = SchemaNotFoundException.class)
@@ -187,20 +190,9 @@ public class CarbondataMetadataTest {
             }
         };
 
-        new MockUp<CarbonTable>() {
-            @Mock
-            public List<CarbonColumn> getCreateOrderColumn(String tableName) {
-                List<CarbonColumn> carbonColumns = new ArrayList<CarbonColumn>();
-                ColumnSchema columnSchema = new ColumnSchema();
-                columnSchema.setDataType(DataType.INT);
-                columnSchema.setColumnName("id");
-                carbonColumns.add(new CarbonColumn(columnSchema, 0, 0));
-                return carbonColumns;
-            }
-        };
-
         new MockUp<SchemaTableName>() {
-            @Mock public String getSchemaName() {
+            @Mock
+            public String getSchemaName() {
                 return "null";
             }
         };
@@ -219,9 +211,10 @@ public class CarbondataMetadataTest {
         };
 
         Map<String, ColumnHandle> columnHandleMap = carbondataMetadata.getColumnHandles(connectorSession, new CarbondataTableHandle("connectorId", new SchemaTableName("schema1", "table1")));
-        assert (((CarbondataColumnHandle) columnHandleMap.get("imei")).getColumnType().equals(VarcharType.VARCHAR));
-        assert (((CarbondataColumnHandle) columnHandleMap.get("id")).getColumnType().equals(IntegerType.INTEGER));
-        assert (((CarbondataColumnHandle) columnHandleMap.get("imei")).getConnectorId().equals("connectorid"));
+
+        assertEquals(((CarbondataColumnHandle) columnHandleMap.get("imei")).getColumnType(), VarcharType.VARCHAR);
+        assertEquals(((CarbondataColumnHandle) columnHandleMap.get("id")).getColumnType(), IntegerType.INTEGER);
+        assertEquals(((CarbondataColumnHandle) columnHandleMap.get("imei")).getConnectorId(), "connectorid");
     }
 
     @Test(expected = SchemaNotFoundException.class)
@@ -235,7 +228,8 @@ public class CarbondataMetadataTest {
         };
 
         new MockUp<SchemaTableName>() {
-            @Mock public String getSchemaName() {
+            @Mock
+            public String getSchemaName() {
                 return "null";
             }
         };
@@ -247,14 +241,14 @@ public class CarbondataMetadataTest {
     public void getColumnMetadataTest() {
         CarbondataColumnHandle columnHandle = new CarbondataColumnHandle("connectorid", "id", IntegerType.INTEGER, 0, 0, 0, true, 0, "1234567890", true, 0, 0);
         ColumnMetadata columnMetadata = carbondataMetadata.getColumnMetadata(connectorSession, new CarbondataTableHandle("connectorId", new SchemaTableName("schema1", "table1")), columnHandle);
-        assert (columnMetadata.getName().equals("id"));
-        assert (columnMetadata.getType().equals(IntegerType.INTEGER));
+        assertEquals(columnMetadata.getName(), "id");
+        assertEquals(columnMetadata.getType(), IntegerType.INTEGER);
     }
 
     @Test
     public void getTableHandleTest() {
         ConnectorTableHandle carbondataTableHandle = carbondataMetadata.getTableHandle(connectorSession, new SchemaTableName("schema1", "table1"));
-        assert (carbondataTableHandle instanceof CarbondataTableHandle);
+        assertTrue(carbondataTableHandle instanceof CarbondataTableHandle);
 
     }
 
@@ -269,8 +263,8 @@ public class CarbondataMetadataTest {
 
         List<ConnectorTableLayoutResult> tableLayoutResults = carbondataMetadata.getTableLayouts(connectorSession, new CarbondataTableHandle("connectorId", new SchemaTableName("schema1", "table1")), new Constraint<ColumnHandle>(columnHandleTupleDomain, convertToPredicate(columnHandleTupleDomain)), Optional.of(columnHandles));
 
-        assert (tableLayoutResults.get(0).getTableLayout().getHandle() instanceof CarbondataTableLayoutHandle);
-        assert (tableLayoutResults.get(0).getUnenforcedConstraint().equals(columnHandleTupleDomain));
+        assertTrue(tableLayoutResults.get(0).getTableLayout().getHandle() instanceof CarbondataTableLayoutHandle);
+        assertEquals(tableLayoutResults.get(0).getUnenforcedConstraint(), columnHandleTupleDomain);
     }
 
     private Predicate<Map<ColumnHandle, NullableValue>> convertToPredicate(TupleDomain<ColumnHandle> tupleDomain) {
@@ -287,10 +281,9 @@ public class CarbondataMetadataTest {
 
         CarbondataTableLayoutHandle carbondataTableLayoutHandle = new CarbondataTableLayoutHandle(carbondataTableHandle, columnHandleTupleDomain);
         ConnectorTableLayout connectorTableLayout = carbondataMetadata.getTableLayout(connectorSession, carbondataTableLayoutHandle);
-        assert (connectorTableLayout.getHandle() instanceof CarbondataTableLayoutHandle);
-        assert (((CarbondataTableLayoutHandle) connectorTableLayout.getHandle()).getConstraint().equals(columnHandleTupleDomain));
+        assertTrue(connectorTableLayout.getHandle() instanceof CarbondataTableLayoutHandle);
+        assertEquals(((CarbondataTableLayoutHandle) connectorTableLayout.getHandle()).getConstraint(), columnHandleTupleDomain);
     }
-
 
     @Test
     public void getTableMetadataTest() {
@@ -316,7 +309,7 @@ public class CarbondataMetadataTest {
 
         ConnectorTableMetadata connectorTableMetadata = carbondataMetadata.getTableMetadata(connectorSession, new CarbondataTableHandle("connectorId", new SchemaTableName("schema1", "table1")));
 
-        assert (connectorTableMetadata.getColumns().get(0).getName().equals("id"));
-        assert (connectorTableMetadata.getColumns().get(0).getType().equals(BigintType.BIGINT));
+        assertEquals(connectorTableMetadata.getColumns().get(0).getName(), "id");
+        assertEquals(connectorTableMetadata.getColumns().get(0).getType(), BigintType.BIGINT);
     }
 }
