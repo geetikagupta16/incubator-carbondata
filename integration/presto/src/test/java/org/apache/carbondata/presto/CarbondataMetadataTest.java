@@ -21,6 +21,7 @@ import org.apache.carbondata.core.metadata.schema.table.column.CarbonColumn;
 import org.apache.carbondata.core.metadata.schema.table.column.ColumnSchema;
 import org.apache.carbondata.presto.impl.CarbonTableConfig;
 import org.apache.carbondata.presto.impl.CarbonTableReader;
+import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -212,7 +213,7 @@ public class CarbondataMetadataTest {
 
         Map<String, ColumnHandle> columnHandleMap = carbondataMetadata.getColumnHandles(connectorSession, new CarbondataTableHandle("connectorId", new SchemaTableName("schema1", "table1")));
 
-        assertEquals(((CarbondataColumnHandle) columnHandleMap.get("imei")).getColumnType(), VarcharType.VARCHAR);
+        Assert.assertEquals(((CarbondataColumnHandle) columnHandleMap.get("imei")).getColumnType(), VarcharType.VARCHAR);
         assertEquals(((CarbondataColumnHandle) columnHandleMap.get("id")).getColumnType(), IntegerType.INTEGER);
         assertEquals(((CarbondataColumnHandle) columnHandleMap.get("imei")).getConnectorId(), "connectorid");
     }

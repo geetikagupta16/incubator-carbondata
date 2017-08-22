@@ -464,54 +464,6 @@ public class CarbonTableReader {
   }
 
   /**
-   * Get all the data blocks of a given segment.
-   * @param filterExpressionProcessor
-   * @param absoluteTableIdentifier
-   * @param tablePath
-   * @param resolver
-   * @param segmentId
-   * @param cacheClient
-   * @param updateStatusManager
-   * @return
-   * @throws IOException
-   */
-  private List<DataRefNode> getDataBlocksOfSegment(
-      FilterExpressionProcessor filterExpressionProcessor,
-      AbsoluteTableIdentifier absoluteTableIdentifier, CarbonTablePath tablePath,
-      FilterResolverIntf resolver, String segmentId, CacheClient cacheClient,
-      SegmentUpdateStatusManager updateStatusManager) throws IOException {
-    //DriverQueryStatisticsRecorder recorder = CarbonTimeStatisticsFactory.getQueryStatisticsRecorderInstance();
-    //QueryStatistic statistic = new QueryStatistic();
-
-    // read segment index
-    Map<SegmentTaskIndexStore.TaskBucketHolder, AbstractIndex> segmentIndexMap =
-        getSegmentAbstractIndexs(absoluteTableIdentifier, tablePath, segmentId, cacheClient,
-            updateStatusManager);
-
-    List<DataRefNode> resultFilterredBlocks = new LinkedList<DataRefNode>();
-    if (null != segmentIndexMap) {
-      // build result
-      for (AbstractIndex abstractIndex : segmentIndexMap.values()) {
-        List<DataRefNode> filterredBlocks;
-        // if no filter is given, get all blocks from Btree Index
-        if (null == resolver) {
-          filterredBlocks = getDataBlocksOfIndex(abstractIndex);
-        } else {
-          // apply filter and get matching blocks
-          filterredBlocks = filterExpressionProcessor
-              .getFilterredBlocks(abstractIndex.getDataRefNode(), resolver, abstractIndex,
-                  absoluteTableIdentifier);
-        }
-        resultFilterredBlocks.addAll(filterredBlocks);
-      }
-    }
-    //statistic.addStatistics(QueryStatisticsConstants.LOAD_BLOCKS_DRIVER, System.currentTimeMillis());
-    //recorder.recordStatisticsForDriver(statistic, "123456"/*job.getConfiguration().get("query.id")*/);
-    return resultFilterredBlocks;
-  }
-
-
-  /**
    * get data blocks of given segment
    */
   private List<DataRefNode> getDataBlocksOfSegment(

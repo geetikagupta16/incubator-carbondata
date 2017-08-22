@@ -24,6 +24,8 @@ import org.apache.carbondata.core.metadata.blocklet.index.BlockletMinMaxIndex;
 import org.apache.carbondata.core.metadata.converter.ThriftWrapperSchemaConverterImpl;
 import org.apache.carbondata.core.metadata.datatype.DataType;
 import org.apache.carbondata.core.metadata.encoder.Encoding;
+import org.apache.carbondata.core.metadata.schema.PartitionInfo;
+import org.apache.carbondata.core.metadata.schema.partition.PartitionType;
 import org.apache.carbondata.core.metadata.schema.table.CarbonTable;
 import org.apache.carbondata.core.metadata.schema.table.TableSchema;
 import org.apache.carbondata.core.metadata.schema.table.column.ColumnSchema;
@@ -155,6 +157,16 @@ public class CarbonTableReaderTest {
                 return tableBlockInfo;
             }
         };
+
+        new MockUp<FilterExpressionProcessor>() {
+            @Mock
+            public BitSet getFilteredPartitions(Expression expressionTree,
+                                                PartitionInfo partitionInfo) {
+                BitSet bitSet = new BitSet(Integer.parseInt("10000"));
+                bitSet.set(0);
+                return bitSet;
+            }
+        };
     }
 
     @After
@@ -205,6 +217,11 @@ public class CarbonTableReaderTest {
         info.setTableUniqueName("schemaName_tableName");
         info.setFactTable(getTableSchema());
         info.setStorePath("storePath");
+        PartitionInfo partitionInfo = new PartitionInfo(info.getFactTable().getListOfColumns(), PartitionType.LIST);
+        List partitionList = new ArrayList();
+        partitionList.add(1);
+        partitionInfo.setPartitionIds(partitionList);
+        info.getFactTable().setPartitionInfo(partitionInfo);
         return info;
     }
 
@@ -251,6 +268,23 @@ public class CarbonTableReaderTest {
         assertEquals(carbonTableCacheModel.carbonTablePath, new CarbonTablePath("storePath", "schemaName", "tableName"));
     }
 
+    @Test(expected = RuntimeException.class)
+    public void getCarbonCacheExceptionCase() {
+        new MockUp<FileFactory>() {
+            @Mock
+            public CarbonFile getCarbonFile(String path, FileFactory.FileType fileType) throws FileNotFoundException {
+                throw new FileNotFoundException("");
+            }
+
+            @Mock
+            public FileFactory.FileType getFileType(String path) {
+                return FileFactory.FileType.LOCAL;
+            }
+
+        };
+        CarbonTableCacheModel carbonTableCacheModel = carbonTableReader.getCarbonCache(new SchemaTableName("schemaName", "tableName"));
+    }
+
     @Test
     public void getSchemaNamesTest() {
 
@@ -291,7 +325,7 @@ public class CarbonTableReaderTest {
     }
 
     @Test(expected = TableNotFoundException.class)
-    public void getTableTestExceptionCase() {
+    public void getTableTestExceptionCaseForTableNotFound() {
         new MockUp<FileFactory>() {
             @Mock
             public FileFactory.FileType getFileType(String path) {
@@ -301,6 +335,17 @@ public class CarbonTableReaderTest {
             @Mock
             public CarbonFile getCarbonFile(String path, FileFactory.FileType fileType) {
                 return new LocalCarbonFile("storePath/schemaName");
+            }
+        };
+        carbonTableReader.getTable(new SchemaTableName("schemaName", "table"));
+    }
+
+    @Test(expected = RuntimeException.class)
+    public void getTableExceptionCase() {
+        new MockUp<FileFactory>() {
+            @Mock
+            public CarbonFile getCarbonFile(String path, FileFactory.FileType fileType) throws FileNotFoundException {
+                throw new FileNotFoundException("");
             }
         };
         carbonTableReader.getTable(new SchemaTableName("schemaName", "table"));
@@ -406,7 +451,7 @@ public class CarbonTableReaderTest {
             @Mock
             public FilterResolverIntf resolveFilter(Expression filterExpression,
                                                     AbsoluteTableIdentifier absoluteTableIdentifier) {
-                return new ConditionalFilterResolverImpl(inputFilter, true, false, new AbsoluteTableIdentifier("/storePath", new CarbonTableIdentifier("schemaName", "tableName", "tableId")));
+                return new ConditionalFilterResolverImpl(inputFilter, true, false, new AbsoluteTableIdentifier("/storePath", new CarbonTableIdentifier("schemaName", "tableName", "tableId")), false);
             }
         };
 
@@ -422,6 +467,15 @@ public class CarbonTableReaderTest {
             public void clearAccessCount(List<TableSegmentUniqueIdentifier> tableSegmentUniqueIdentifiers) {
             }
         };
+
+        /*new MockUp<FilterExpressionProcessor>() {
+            @Mock public BitSet getFilteredPartitions(Expression expressionTree,
+                                                      PartitionInfo partitionInfo) {
+                BitSet bitSet = new BitSet(Integer.parseInt("10000"));
+                bitSet.set(0);
+                return bitSet;
+            }
+        };*/
 
         List<CarbonLocalInputSplit> expectedResult = carbonTableReader.getInputSplits2(carbonTableCacheModel, inputFilter);
         assertEquals(expectedResult.get(0).getSegmentId(), "1");
@@ -470,7 +524,7 @@ public class CarbonTableReaderTest {
             @Mock
             public FilterResolverIntf resolveFilter(Expression filterExpression,
                                                     AbsoluteTableIdentifier absoluteTableIdentifier) {
-                return new ConditionalFilterResolverImpl(inputFilter, true, false, new AbsoluteTableIdentifier("/storePath", new CarbonTableIdentifier("schemaName", "tableName", "tableId")));
+                return new ConditionalFilterResolverImpl(inputFilter, true, false, new AbsoluteTableIdentifier("/storePath", new CarbonTableIdentifier("schemaName", "tableName", "tableId")), false);
             }
         };
 
