@@ -408,6 +408,7 @@ public class CarbonTableReaderTest {
         carbonTableCacheModel.carbonTable = CarbonTable.buildFromTableInfo(getTableInfo(1000L));
 
         List<CarbonLocalInputSplit> expectedResult = carbonTableReader.getInputSplits2(carbonTableCacheModel, inputFilter);
+        assertEquals(expectedResult.size(), 0);
     }
 
     @Test
@@ -467,15 +468,6 @@ public class CarbonTableReaderTest {
             public void clearAccessCount(List<TableSegmentUniqueIdentifier> tableSegmentUniqueIdentifiers) {
             }
         };
-
-        /*new MockUp<FilterExpressionProcessor>() {
-            @Mock public BitSet getFilteredPartitions(Expression expressionTree,
-                                                      PartitionInfo partitionInfo) {
-                BitSet bitSet = new BitSet(Integer.parseInt("10000"));
-                bitSet.set(0);
-                return bitSet;
-            }
-        };*/
 
         List<CarbonLocalInputSplit> expectedResult = carbonTableReader.getInputSplits2(carbonTableCacheModel, inputFilter);
         assertEquals(expectedResult.get(0).getSegmentId(), "1");
