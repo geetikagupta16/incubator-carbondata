@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.carbondata.presto.it;
+package util;
 
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
@@ -72,6 +72,7 @@ import org.apache.carbondata.core.writer.sortindex.CarbonDictionarySortIndexWrit
 import org.apache.carbondata.core.writer.sortindex.CarbonDictionarySortIndexWriterImpl;
 import org.apache.carbondata.core.writer.sortindex.CarbonDictionarySortInfo;
 import org.apache.carbondata.core.writer.sortindex.CarbonDictionarySortInfoPreparator;
+import org.apache.carbondata.presto.it.PrestoIntegrationTest;
 import org.apache.carbondata.processing.api.dataloader.SchemaInfo;
 import org.apache.carbondata.processing.constants.TableOptionConstant;
 import org.apache.carbondata.processing.csvload.BlockDetails;
@@ -100,30 +101,17 @@ public class StoreCreator {
 
   private static AbsoluteTableIdentifier absoluteTableIdentifier;
 
-  static {
+  /**
+   * Create store without any restructure
+   */
+  public static void createCarbonStore(String storePath) {
+
     try {
-      String storePath = new File("target/store").getCanonicalPath();
       String dbName = "testdb";
       String tableName = "testtable";
       absoluteTableIdentifier =
           new AbsoluteTableIdentifier(storePath, new CarbonTableIdentifier(dbName, tableName, UUID.randomUUID().toString()));
-    } catch (IOException ex) {
-
-    }
-  }
-
-  public static AbsoluteTableIdentifier getAbsoluteTableIdentifier() {
-    return absoluteTableIdentifier;
-  }
-
-  /**
-   * Create store without any restructure
-   */
-  public static void createCarbonStore() {
-
-    try {
-
-      String factFilePath = new File("/home/geetika/Workspace/incubator-carbondata/integration/presto/src/main/resources/data.csv").getCanonicalPath();
+      String factFilePath = new File("../presto/src/test/resources/data.csv").getCanonicalPath();
       File storeDir = new File(absoluteTableIdentifier.getStorePath());
       CarbonUtil.deleteFoldersAndFiles(storeDir);
       CarbonProperties.getInstance().addProperty(CarbonCommonConstants.STORE_LOCATION_HDFS,
@@ -133,7 +121,6 @@ public class StoreCreator {
       writeDictionary(factFilePath, table);
       CarbonDataLoadSchema schema = new CarbonDataLoadSchema(table);
       CarbonLoadModel loadModel = new CarbonLoadModel();
-      String partitionId = "0";
       loadModel.setCarbonDataLoadSchema(schema);
       loadModel.setDatabaseName(absoluteTableIdentifier.getCarbonTableIdentifier().getDatabaseName());
       loadModel.setTableName(absoluteTableIdentifier.getCarbonTableIdentifier().getTableName());
@@ -172,6 +159,7 @@ public class StoreCreator {
 
     } catch (Exception e) {
       e.printStackTrace();
+      System.exit(0);
     }
 
   }
@@ -491,7 +479,7 @@ public class StoreCreator {
 
   public static String readCurrentTime() {
     SimpleDateFormat sdf = new SimpleDateFormat(CarbonCommonConstants.CARBON_TIMESTAMP);
-    String date = null;
+    String date ;
 
     date = sdf.format(new Date());
 
