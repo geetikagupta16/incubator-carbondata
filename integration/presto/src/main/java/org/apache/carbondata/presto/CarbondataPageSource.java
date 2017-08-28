@@ -158,6 +158,7 @@ class CarbondataPageSource implements ConnectorPageSource {
     }
     catch ( RuntimeException e) {
       closeWithSuppression(e);
+      e.printStackTrace();
       throw new RuntimeException("Exception when creating the Carbon data Block", e);
     }
 

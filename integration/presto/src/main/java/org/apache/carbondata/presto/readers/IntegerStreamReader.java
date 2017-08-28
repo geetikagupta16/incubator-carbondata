@@ -36,6 +36,7 @@ public class IntegerStreamReader implements StreamReader {
     BlockBuilder builder = type.createBlockBuilder(new BlockBuilderStatus(), batchSize);
     if (streamData != null) {
       for (int i = 0; i < batchSize; i++) {
+        System.out.println("%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%"+streamData[i]);
         type.writeLong(builder, ((Integer) streamData[i]).longValue());
       }
     }

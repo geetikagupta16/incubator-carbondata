@@ -72,7 +72,6 @@ import org.apache.carbondata.core.writer.sortindex.CarbonDictionarySortIndexWrit
 import org.apache.carbondata.core.writer.sortindex.CarbonDictionarySortIndexWriterImpl;
 import org.apache.carbondata.core.writer.sortindex.CarbonDictionarySortInfo;
 import org.apache.carbondata.core.writer.sortindex.CarbonDictionarySortInfoPreparator;
-import org.apache.carbondata.presto.it.PrestoIntegrationTest;
 import org.apache.carbondata.processing.api.dataloader.SchemaInfo;
 import org.apache.carbondata.processing.constants.TableOptionConstant;
 import org.apache.carbondata.processing.csvload.BlockDetails;
@@ -92,26 +91,29 @@ import org.apache.hadoop.mapred.TaskAttemptID;
 import org.apache.hadoop.mapreduce.RecordReader;
 import org.apache.hadoop.mapreduce.TaskType;
 import org.apache.hadoop.mapreduce.task.TaskAttemptContextImpl;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * This class will create store file based on provided schema
- *
  */
-public class StoreCreator {
+public class CarbonDataStoreCreator {
 
   private static AbsoluteTableIdentifier absoluteTableIdentifier;
+  private static Logger logger = LoggerFactory.getLogger(CarbonDataStoreCreator.class);
 
   /**
    * Create store without any restructure
    */
-  public static void createCarbonStore(String storePath) {
+  public static void createCarbonStore(String storePath, String dataFilePath) {
 
     try {
+      logger.info("Creating The Carbon Store");
       String dbName = "testdb";
       String tableName = "testtable";
-      absoluteTableIdentifier =
-          new AbsoluteTableIdentifier(storePath, new CarbonTableIdentifier(dbName, tableName, UUID.randomUUID().toString()));
-      String factFilePath = new File("../presto/src/test/resources/data.csv").getCanonicalPath();
+      absoluteTableIdentifier = new AbsoluteTableIdentifier(storePath,
+          new CarbonTableIdentifier(dbName, tableName, UUID.randomUUID().toString()));
+      String factFilePath = new File(dataFilePath).getCanonicalPath();
       File storeDir = new File(absoluteTableIdentifier.getStorePath());
       CarbonUtil.deleteFoldersAndFiles(storeDir);
       CarbonProperties.getInstance().addProperty(CarbonCommonConstants.STORE_LOCATION_HDFS,
@@ -121,6 +123,7 @@ public class StoreCreator {
       writeDictionary(factFilePath, table);
       CarbonDataLoadSchema schema = new CarbonDataLoadSchema(table);
       CarbonLoadModel loadModel = new CarbonLoadModel();
+      String partitionId = "0";
       loadModel.setCarbonDataLoadSchema(schema);
       loadModel.setDatabaseName(absoluteTableIdentifier.getCarbonTableIdentifier().getDatabaseName());
       loadModel.setTableName(absoluteTableIdentifier.getCarbonTableIdentifier().getTableName());
@@ -159,7 +162,6 @@ public class StoreCreator {
 
     } catch (Exception e) {
       e.printStackTrace();
-      System.exit(0);
     }
 
   }
@@ -172,7 +174,7 @@ public class StoreCreator {
     tableSchema.setTableName(absoluteTableIdentifier.getCarbonTableIdentifier().getTableName());
     List<ColumnSchema> columnSchemas = new ArrayList<ColumnSchema>();
     ArrayList<Encoding> encodings = new ArrayList<>();
-    encodings.add(Encoding.DICTIONARY);
+    encodings.add(Encoding.INVERTED_INDEX);
     ColumnSchema id = new ColumnSchema();
     id.setColumnName("ID");
     id.setColumnar(true);
@@ -183,10 +185,12 @@ public class StoreCreator {
     id.setColumnGroup(1);
     columnSchemas.add(id);
 
+
     ColumnSchema date = new ColumnSchema();
+
     date.setColumnName("date");
     date.setColumnar(true);
-    date.setDataType(DataType.STRING);
+    date.setDataType(DataType.DATE);
     date.setEncodingList(encodings);
     date.setColumnUniqueId(UUID.randomUUID().toString());
     date.setDimensionColumn(true);
@@ -197,7 +201,7 @@ public class StoreCreator {
     ColumnSchema country = new ColumnSchema();
     country.setColumnName("country");
     country.setColumnar(true);
-    country.setDataType(DataType.STRING);
+    country.setDataType(DataType.DATE);
     country.setEncodingList(encodings);
     country.setColumnUniqueId(UUID.randomUUID().toString());
     country.setDimensionColumn(true);
@@ -211,7 +215,8 @@ public class StoreCreator {
     name.setDataType(DataType.STRING);
     name.setEncodingList(encodings);
     name.setColumnUniqueId(UUID.randomUUID().toString());
-    name.setDimensionColumn(true);
+    name.setDimensionColumn(true
+    );
     name.setColumnGroup(4);
     name.setSortColumn(true);
     columnSchemas.add(name);
@@ -323,7 +328,7 @@ public class StoreCreator {
       writer.commit();
       Dictionary dict = (Dictionary) dictCache.get(
           new DictionaryColumnUniqueIdentifier(absoluteTableIdentifier.getCarbonTableIdentifier(),
-        		  columnIdentifier, dims.get(i).getDataType()));
+              columnIdentifier, dims.get(i).getDataType()));
       CarbonDictionarySortInfoPreparator preparator =
           new CarbonDictionarySortInfoPreparator();
       List<String> newDistinctValues = new ArrayList<String>();
@@ -457,7 +462,7 @@ public class StoreCreator {
 
       dataOutputStream = writeOperation.openForWrite(FileWriteOperation.OVERWRITE);
       brWriter = new BufferedWriter(new OutputStreamWriter(dataOutputStream,
-              Charset.forName(CarbonCommonConstants.DEFAULT_CHARSET)));
+          Charset.forName(CarbonCommonConstants.DEFAULT_CHARSET)));
 
       String metadataInstance = gsonObjectToWrite.toJson(listOfLoadFolderDetails.toArray());
       brWriter.write(metadataInstance);
@@ -479,7 +484,7 @@ public class StoreCreator {
 
   public static String readCurrentTime() {
     SimpleDateFormat sdf = new SimpleDateFormat(CarbonCommonConstants.CARBON_TIMESTAMP);
-    String date ;
+    String date = null;
 
     date = sdf.format(new Date());
 
