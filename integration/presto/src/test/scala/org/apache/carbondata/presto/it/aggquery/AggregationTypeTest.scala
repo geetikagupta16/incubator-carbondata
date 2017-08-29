@@ -26,7 +26,7 @@ import org.apache.carbondata.common.logging.LogServiceFactory
 import org.apache.carbondata.presto.server.PrestoServer
 
 
-class AggregationTypeTest extends FunSuiteLike with BeforeAndAfterAll with ShouldMatchers{
+class AggregationTypeTest extends FunSuiteLike with BeforeAndAfterAll with ShouldMatchers {
 
   private val logger = LogServiceFactory
     .getLogService(classOf[AggregationTypeTest].getCanonicalName)
@@ -42,13 +42,17 @@ class AggregationTypeTest extends FunSuiteLike with BeforeAndAfterAll with Shoul
     PrestoServer.startServer(storePath)
   }
 
+  override def afterAll(): Unit = {
+    PrestoServer.stopServer()
+  }
+
   test("test the result for count(*) in presto") {
     val actualResult: List[Map[String, Any]] = PrestoServer
       .executeQuery("SELECT COUNT(*) AS RESULT FROM TESTDB.TESTTABLE ")
     val expectedResult: List[Map[String, Any]] = List(Map("RESULT" -> 10))
     forAll(expectedResult)(actualResult should contain(_))
   }
-  test("test the result for count()clause with distinct operator in presto") {
+  test("test the result for count() clause with distinct operator in presto") {
     val actualResult: List[Map[String, Any]] = PrestoServer
       .executeQuery("SELECT COUNT(DISTINCT ID) AS RESULT FROM TESTDB.TESTTABLE ")
     val expectedResult: List[Map[String, Any]] = List(Map("RESULT" -> 9))
@@ -67,19 +71,19 @@ class AggregationTypeTest extends FunSuiteLike with BeforeAndAfterAll with Shoul
     val expectedResult: List[Map[String, Any]] = List(Map("RESULT" -> 45))
     forAll(expectedResult)(actualResult should contain(_))
   }
-  test("test the result for avg() wiTh distinct operator in presto") {
+  test("test the result for avg() with distinct operator in presto") {
     val actualResult: List[Map[String, Any]] = PrestoServer
       .executeQuery("SELECT AVG(DISTINCT ID) AS RESULT FROM TESTDB.TESTTABLE ")
     val expectedResult: List[Map[String, Any]] = List(Map("RESULT" -> 5))
     forAll(expectedResult)(actualResult should contain(_))
   }
-  test("test the result for min() wiTh distinct operator in presto") {
+  test("test the result for min() with distinct operator in presto") {
     val actualResult: List[Map[String, Any]] = PrestoServer
       .executeQuery("SELECT MIN(DISTINCT ID) AS RESULT FROM TESTDB.TESTTABLE ")
     val expectedResult: List[Map[String, Any]] = List(Map("RESULT" -> 1))
     forAll(expectedResult)(actualResult should contain(_))
   }
-  test("test the result for max() wiTh distinct operator in presto") {
+  test("test the result for max() with distinct operator in presto") {
     val actualResult: List[Map[String, Any]] = PrestoServer
       .executeQuery("SELECT MAX(DISTINCT ID) AS RESULT FROM TESTDB.TESTTABLE ")
     val expectedResult: List[Map[String, Any]] = List(Map("RESULT" -> 9))
@@ -87,50 +91,51 @@ class AggregationTypeTest extends FunSuiteLike with BeforeAndAfterAll with Shoul
   }
   test("test the result for count()clause with distinct operator on decimal column in presto") {
     val actualResult: List[Map[String, Any]] = PrestoServer
-      .executeQuery("SELECT COUNT(DISTINCT INCENTIVES) AS RESULT FROM TESTDB.TESTTABLE ")
+      .executeQuery("SELECT COUNT(DISTINCT BONUS) AS RESULT FROM TESTDB.TESTTABLE ")
     val expectedResult: List[Map[String, Any]] = List(Map("RESULT" -> 7))
     actualResult.equals(expectedResult)
   }
   test("test the result for count()clause with out  distinct operator on decimal column in presto")
   {
     val actualResult: List[Map[String, Any]] = PrestoServer
-      .executeQuery("SELECT COUNT(INCENTIVES) AS RESULT FROM TESTDB.TESTTABLE ")
+      .executeQuery("SELECT COUNT(BONUS) AS RESULT FROM TESTDB.TESTTABLE ")
     val expectedResult: List[Map[String, Any]] = List(Map("RESULT" -> 10))
     actualResult.equals(expectedResult)
   }
   test("test the result for sum()with out distinct operator for decimal column in presto") {
     val actualResult: List[Map[String, Any]] = PrestoServer
-      .executeQuery("SELECT SUM(DISTINCT INCENTIVES) AS RESULT FROM TESTDB.TESTTABLE ")
+      .executeQuery("SELECT SUM(DISTINCT BONUS) AS RESULT FROM TESTDB.TESTTABLE ")
     val expectedResult: List[Map[String, Any]] = List(Map("RESULT" -> 54))
     actualResult.equals(expectedResult)
   }
   test("test the result for sum() with distinct operator for decimal column in presto") {
     val actualResult: List[Map[String, Any]] = PrestoServer
-      .executeQuery("SELECT SUM(DISTINCT INCENTIVES) AS RESULT FROM TESTDB.TESTTABLE ")
-    val expectedResult: List[Map[String, Any]] = List(Map("RESULT" -> 62303))
+      .executeQuery("SELECT SUM(DISTINCT BONUS) AS RESULT FROM TESTDB.TESTTABLE ")
+    val expectedResult: List[Map[String, Any]] = List(Map("RESULT" -> 20774.6475))
     assert(
-      actualResult.head("RESULT").toString.toInt == expectedResult.head("RESULT").toString.toInt)
+      actualResult.head("RESULT").toString.toDouble ==
+      expectedResult.head("RESULT").toString.toDouble)
   }
   test("test the result for avg() with distinct operator on decimal in presto") {
     val actualResult: List[Map[String, Any]] = PrestoServer
-      .executeQuery("SELECT AVG(DISTINCT INCENTIVES) AS RESULT FROM TESTDB.TESTTABLE ")
+      .executeQuery("SELECT AVG(DISTINCT BONUS) AS RESULT FROM TESTDB.TESTTABLE ")
     val expectedResult: List[Map[String, Any]] = List(Map("RESULT" -> 8900))
     actualResult.equals(expectedResult)
   }
 
-  /* test("test the result for min() wiTh distinct operator in presto") {
+  test("test the result for min() with distinct operator in decimalType of presto") {
     val actualResult: List[Map[String, Any]] = PrestoServer
-       .executeQuery("SELECT MIN(DISTINCT ID) AS RESULT FROM TESTDB.TESTTABLE ")
-   val expectedResult: List[Map[String, Any]] = List(Map("RESULT" -> 1))
-     assert(actualResult equals expectedResult)
-   }
-   test("test the result for max() wiTh distinct operator in presto") {
+      .executeQuery("SELECT MIN(BONUS) AS RESULT FROM TESTDB.TESTTABLE ")
+    val expectedResult: List[Map[String, Any]] = List(Map(
+      "RESULT" -> java.math.BigDecimal.valueOf(500.414).setScale(4)))
+    actualResult.equals(expectedResult)
+  }
+
+  test("test the result for max() with distinct operator in decimalType of presto") {
     val actualResult: List[Map[String, Any]] = PrestoServer
-       .executeQuery("SELECT MAX(DISTINCT ID) AS RESULT FROM TESTDB.TESTTABLE ")
-   val expectedResult: List[Map[String, Any]] = List(Map("RESULT" -> 9))
-     val result = assert(actualResult equals expectedResult)
-   }*/
-  override def afterAll(): Unit = {
-    PrestoServer.stopServer()
+      .executeQuery("SELECT MAX(BONUS) AS RESULT FROM TESTDB.TESTTABLE ")
+    val expectedResult: List[Map[String, Any]] = List(Map(
+      "RESULT" -> java.math.BigDecimal.valueOf(9999.999).setScale(4)))
+    actualResult.equals(expectedResult)
   }
 }

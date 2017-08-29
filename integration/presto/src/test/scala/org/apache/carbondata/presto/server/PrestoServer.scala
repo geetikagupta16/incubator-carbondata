@@ -41,6 +41,7 @@ object PrestoServer {
   val CARBONDATA_SOURCE = "carbondata"
   val logger: Logger = LoggerFactory.getLogger(this.getClass)
 
+
   val prestoProperties: util.Map[String, String] = Map(("http-server.http.port", "8086")).asJava
   createSession
   val queryRunner = new DistributedQueryRunner(createSession, 4, prestoProperties)

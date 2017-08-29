@@ -1,4 +1,4 @@
-
+<?xml version="1.0" encoding="UTF-8"?>
 <!--
     Licensed to the Apache Software Foundation (ASF) under one or more
     contributor license agreements.  See the NOTICE file distributed with
@@ -6,7 +6,9 @@
     The ASF licenses this file to You under the Apache License, Version 2.0
     (the "License"); you may not use this file except in compliance with
     the License.  You may obtain a copy of the License at
+
        http://www.apache.org/licenses/LICENSE-2.0
+
     Unless required by applicable law or agreed to in writing, software
     distributed under the License is distributed on an "AS IS" BASIS,
     WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -390,12 +392,7 @@
       <artifactId>spark-network-common_2.11</artifactId>
       <version>2.1.0</version>
     </dependency>
-    <dependency>
-      <groupId>org.scalatest</groupId>
-      <artifactId>scalatest_${scala.binary.version}</artifactId>
-      <version>2.2.1</version>
-      <scope>provided</scope>
-    </dependency>
+
   </dependencies>
 
   <build>
@@ -471,13 +468,13 @@
         </configuration>
       </plugin>
 
-      <!--   <plugin>
-             <groupId>io.takari.maven.plugins</groupId>
-             <artifactId>presto-maven-plugin</artifactId>
-             <version>0.1.12</version>
-             <extensions>true</extensions>
-         </plugin>
--->
+      <plugin>
+        <groupId>io.takari.maven.plugins</groupId>
+        <artifactId>presto-maven-plugin</artifactId>
+        <version>0.1.12</version>
+        <extensions>true</extensions>
+      </plugin>
+
       <plugin>
         <groupId>pl.project13.maven</groupId>
         <artifactId>git-commit-id-plugin</artifactId>
@@ -513,26 +510,6 @@
           </execution>
         </executions>
       </plugin>
-
-      <!--<plugin>
-        <groupId>org.codehaus.mojo</groupId>
-        <artifactId>exec-maven-plugin</artifactId>
-        <version>1.6.0</version>
-        <executions>
-          <execution>
-            <id>first-execution</id>
-            <goals>
-              <goal>java</goal>
-            </goals>
-            <phase>
-              compile
-            </phase>
-            <configuration>
-              <mainClass>org.apache.carbondata.presto.PrestoBenchMarking</mainClass>
-            </configuration>
-          </execution>
-        </executions>
-      </plugin>-->
     </plugins>
   </build>
 </project>
