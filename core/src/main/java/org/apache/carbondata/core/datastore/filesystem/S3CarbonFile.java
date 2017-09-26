@@ -21,7 +21,7 @@ public class S3CarbonFile implements CarbonFile
 {
 
   private static final LogService LOGGER =
-      LogServiceFactory.getLogService(AlluxioCarbonFile.class.getName());
+      LogServiceFactory.getLogService(S3CarbonFile.class.getName());
 
   protected FileStatus fileStatus;
 
