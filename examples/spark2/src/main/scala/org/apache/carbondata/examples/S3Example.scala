@@ -12,29 +12,21 @@ object S3Example {
   val logger = LogServiceFactory.getLogService(this.getClass.getCanonicalName)
   val rootPath = new File(this.getClass.getResource("/").getPath
                           + "../../../..").getCanonicalPath
-  val warehouse = s"$rootPath/integration/hive/target/warehouse"
-  val metastoredbS3 = s"$rootPath/integration/hive/target/s3_metastore_db"
-  //  val metastoredb = s"/home/bhavya/sparktest/comparetestsort_metastore_db"
-  val metastoredbLocal = s"$rootPath/integration/hive/target/"
-
-  val metastoredb = s"$rootPath/integration/hive/target/"
-
+  val metastoredb_S3 = s"$rootPath/examples/spark2/target/s3_metastore_db"
   val carbonTableName = "comparetest_hive_carbon"
+  val warehouse = s"$rootPath/examples/spark2/target/warehouse"
 
   def main(args: Array[String]) {
     CarbonProperties.getInstance()
       .addProperty("carbon.enable.vector.reader", "true")
       .addProperty("enable.unsafe.sort", "true")
       .addProperty("carbon.blockletgroup.size.in.mb", "32")
-      //.addProperty(CarbonCommonConstants.CARBON_TIMESTAMP_FORMAT, "yyyy-MM-dd HH:mm:ss")
-      //.addProperty(CarbonCommonConstants.CARBON_DATE_FORMAT, "yyyy-MM-dd")
       .addProperty(CarbonCommonConstants.CARBON_TIMESTAMP_FORMAT, "yyyy/MM/dd HH:mm:ss")
       .addProperty(CarbonCommonConstants.CARBON_DATE_FORMAT, "yyyy/MM/dd")
-      // .addProperty(CarbonCommonConstants.LOCK_TYPE, CarbonCommonConstants.CARBON_LOCK_TYPE_HDFS)
       .addProperty(CarbonCommonConstants.LOCK_TYPE, CarbonCommonConstants.CARBON_LOCK_TYPE_S3)
-      .addProperty(CarbonCommonConstants.S3_ACCESS_KEY, "")
-      .addProperty(CarbonCommonConstants.S3_SECRET_KEY, "")
-      .addProperty(CarbonCommonConstants.S3_ENDPOINT, "")
+      .addProperty(CarbonCommonConstants.S3_ACCESS_KEY, "*********")
+      .addProperty(CarbonCommonConstants.S3_SECRET_KEY, "*********")
+      .addProperty(CarbonCommonConstants.S3_ENDPOINT, "***********")
       .addProperty(CarbonCommonConstants.S3_SSL_ENABLED, "false")
       .addProperty(CarbonCommonConstants.S3_MAX_ERROR_RETRIES, "2")
       .addProperty(CarbonCommonConstants.S3_MAX_CLIENT_RETRIES, "2")
@@ -50,10 +42,47 @@ object S3Example {
       .builder()
       .master("local")
       .appName("CompareTestExample")
-      .config("carbon.sql.warehouse.dir", warehouse).enableHiveSupport()
+      .config("carbon.sql.warehouse.dir", warehouse)
       .getOrCreateCarbonSession(
-        "s3a://testcarbon12345", metastoredbS3)
+        "s3a://testcarbon12345", metastoredb_S3)
 
-    carbon.sql(s"drop table if exists REGION");
+    carbon.sql("DROP TABLE IF EXISTS carbon_table")
+
+    // Create table
+    carbon.sql(
+      s"""
+         | CREATE TABLE carbon_table(
+         | shortField SHORT,
+         | intField INT,
+         | bigintField LONG,
+         | doubleField DOUBLE,
+         | stringField STRING,
+         | timestampField TIMESTAMP,
+         | decimalField DECIMAL(18,2),
+         | dateField DATE,
+         | charField CHAR(5),
+         | floatField FLOAT,
+         | complexData ARRAY<STRING>
+         | )
+         | STORED BY 'carbondata'
+         | TBLPROPERTIES('SORT_COLUMNS'='', 'DICTIONARY_INCLUDE'='dateField, charField')
+       """.stripMargin)
+
+    val path = s"$rootPath/examples/spark2/src/main/resources/data.csv"
+
+    // scalastyle:off
+    carbon.sql(
+      s"""
+         | LOAD DATA LOCAL INPATH '$path'
+         | INTO TABLE carbon_table
+         | OPTIONS('HEADER'='true', 'COMPLEX_DELIMITER_LEVEL_1'='#')
+       """.stripMargin)
+    // scalastyle:on
+
+    carbon.sql(
+      s"""
+         | SELECT *
+         | FROM carbon_table
+      """.stripMargin).show()
   }
 }
