@@ -1,7 +1,9 @@
-package org.apache.carbondata.core.datastore.impl.btree;
+package org.apache.carbondata.core.datastore.impl;
 
-import com.amazonaws.services.s3.AmazonS3;
+import com.amazonaws.AmazonServiceException;
+import com.amazonaws.SdkClientException;
 import com.amazonaws.services.s3.AmazonS3Client;
+import com.amazonaws.services.s3.model.ObjectListing;
 import com.amazonaws.services.s3.model.ObjectMetadata;
 import mockit.Mock;
 import mockit.MockUp;
@@ -22,8 +24,9 @@ import java.net.URISyntaxException;
 public class CarbonS3FileSystemTest {
 
     CarbonS3FileSystem carbonS3FileSystem = new CarbonS3FileSystem();
+    Path path = new Path("/path");
 
-    @Test
+  /*  @Test
     public void testDeleteSuccessCase() {
         //pending
         Path path = new Path("/abc");
@@ -33,12 +36,57 @@ public class CarbonS3FileSystemTest {
             Assert.assertTrue(false);
             e.printStackTrace();
         }
-    }
+    }*/
+
+    /*@Test
+    public void testGetFileStatusForNonEmptyPathAndNullMetadata() {
+
+        new MockUp<Path>() {
+            @Mock
+            public String getName() {
+                return "/path";
+            }
+
+            @Mock
+            public Path makeQualified(FileSystem fs) {
+                return path;
+            }
+
+            @Mock
+            public boolean isAbsolute() { return true; }
+        };
+
+        new MockUp<URI>() {
+            @Mock
+            public String getHost() {
+                return "knoldus";
+            }
+        };
+
+        new MockUp<AmazonS3Client>() {
+            @Mock
+            public ObjectMetadata getObjectMetadata(String bucketName, String key) {
+                return null;
+            }
+
+            @Mock public ObjectListing listObjects(String bucketName) throws SdkClientException, AmazonServiceException {
+                return new ObjectListing();
+            }
+        };
+
+        writeFields();
+        try {
+            FileStatus fileStatus = carbonS3FileSystem.getFileStatus(path);
+        } catch (IOException e) {
+            Assert.assertTrue(false);
+            e.printStackTrace();
+        }
+
+    }*/
 
     // Done
     @Test
     public void testGetFileStatusForEmptyPath() {
-        Path path = new Path("/path");
 
         new MockUp<Path>() {
             @Mock
@@ -62,7 +110,7 @@ public class CarbonS3FileSystemTest {
         writeFields();
         try {
             FileStatus fileStatus = carbonS3FileSystem.getFileStatus(path);
-            Assert.assertEquals(0 ,fileStatus.getLen());
+            Assert.assertEquals(0, fileStatus.getLen());
             Assert.assertEquals(path, fileStatus.getPath());
         } catch (IOException e) {
             Assert.assertTrue(false);
@@ -100,7 +148,6 @@ public class CarbonS3FileSystemTest {
         };
 
         writeFields();
-        Path path = new Path("/path");
         try {
             carbonS3FileSystem.getFileStatus(path);
         } catch (FileNotFoundException fileNotFoundException) {
@@ -152,7 +199,6 @@ public class CarbonS3FileSystemTest {
         };
 
         writeFields();
-        Path path = new Path("/path");
         try {
             carbonS3FileSystem.getFileStatus(path);
         } catch (IllegalArgumentException illegalArgumentException) {
