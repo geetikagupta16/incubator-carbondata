@@ -24,6 +24,7 @@ import org.junit.Test;
 import java.io.DataOutputStream;
 import java.io.File;
 import java.io.IOException;
+import java.lang.reflect.Field;
 import java.net.URI;
 
 import static junit.framework.TestCase.assertFalse;
@@ -134,7 +135,7 @@ public class S3FileLockTest {
     }
 
     @Test
-    public void lockAndUnlockTestFailureCaseForUnlock() {
+    public void lockAndUnlockTestFailureCaseForUnlock() throws NoSuchFieldException, IOException, IllegalAccessException {
 
         new MockUp<FileFactory>() {
             @Mock
@@ -185,12 +186,17 @@ public class S3FileLockTest {
         carbonProperties.addProperty(CarbonCommonConstants.STORE_LOCATION, "s3a://tmp");
         CarbonTableIdentifier carbonTableIdentifier = new CarbonTableIdentifier("dbName", "tableName", "tableId");
         S3FileLock s3FileLock = new S3FileLock(carbonTableIdentifier, "lockFile");
-        assertTrue(s3FileLock.lock());
+
+
+        Field dataOutputStream = s3FileLock.getClass().getDeclaredField("dataOutputStream");
+        dataOutputStream.setAccessible(true);
+        dataOutputStream.set(s3FileLock, new FSDataOutputStream(new CarbonS3FileSystem.CarbonS3OutputStream(new AmazonS3Client(), new TransferManagerConfiguration(), "host", "key", f, false, CarbonS3FileSystem.CarbonS3SseType.S3, "keyID")));
+
         assertFalse(s3FileLock.unlock());
     }
 
     @Test
-    public void unlockFailureDataOutputStreamNotClosed() {
+    public void unlockFailureDataOutputStreamNotClosed() throws NoSuchFieldException, IOException, IllegalAccessException {
 
         new MockUp<FileFactory>() {
             @Mock
@@ -241,12 +247,14 @@ public class S3FileLockTest {
         carbonProperties.addProperty(CarbonCommonConstants.STORE_LOCATION, "s3a://tmp");
         CarbonTableIdentifier carbonTableIdentifier = new CarbonTableIdentifier("dbName", "tableName", "tableId");
         S3FileLock s3FileLock = new S3FileLock(carbonTableIdentifier, "lockFile");
-        assertTrue(s3FileLock.lock());
+        Field dataOutputStream = s3FileLock.getClass().getDeclaredField("dataOutputStream");
+        dataOutputStream.setAccessible(true);
+        dataOutputStream.set(s3FileLock, new FSDataOutputStream(new CarbonS3FileSystem.CarbonS3OutputStream(new AmazonS3Client(), new TransferManagerConfiguration(), "host", "key", f, false, CarbonS3FileSystem.CarbonS3SseType.S3, "keyID")));
         assertFalse(s3FileLock.unlock());
     }
 
     @Test
-    public void unlockTestFailureCaseLockFileNotFound() {
+    public void unlockTestFailureCaseLockFileNotFound() throws NoSuchFieldException, IOException, IllegalAccessException {
 
         new MockUp<FileFactory>() {
             @Mock
@@ -299,7 +307,9 @@ public class S3FileLockTest {
         carbonProperties.addProperty(CarbonCommonConstants.STORE_LOCATION, "s3a://tmp");
         CarbonTableIdentifier carbonTableIdentifier = new CarbonTableIdentifier("dbName", "tableName", "tableId");
         S3FileLock s3FileLock = new S3FileLock(carbonTableIdentifier, "lockFile");
-        assertTrue(s3FileLock.lock());
+        Field dataOutputStream = s3FileLock.getClass().getDeclaredField("dataOutputStream");
+        dataOutputStream.setAccessible(true);
+        dataOutputStream.set(s3FileLock, new FSDataOutputStream(new CarbonS3FileSystem.CarbonS3OutputStream(new AmazonS3Client(), new TransferManagerConfiguration(), "host", "key", f, false, CarbonS3FileSystem.CarbonS3SseType.S3, "keyID")));
         assertFalse(s3FileLock.unlock());
     }
 
