@@ -38,7 +38,7 @@ public class S3FileLockTest {
     }
 
     @Test
-    public void lockAndUnlockTest() {
+    public void lockTest() {
 
         new MockUp<FileFactory>() {
             @Mock
@@ -79,18 +79,12 @@ public class S3FileLockTest {
             }
         };
 
-        new MockUp<S3CarbonFile>() {
-            @Mock public boolean delete() {
-                return true;
-            }
-        };
 
         CarbonProperties carbonProperties = CarbonProperties.getInstance();
         carbonProperties.addProperty(CarbonCommonConstants.STORE_LOCATION, "s3a://tmp");
         CarbonTableIdentifier carbonTableIdentifier = new CarbonTableIdentifier("dbName", "tableName", "tableId");
         S3FileLock s3FileLock = new S3FileLock(carbonTableIdentifier, "lockFile");
         assertTrue(s3FileLock.lock());
-        assertTrue(s3FileLock.unlock());
 
     }
 
@@ -135,7 +129,74 @@ public class S3FileLockTest {
     }
 
     @Test
-    public void lockAndUnlockTestFailureCaseForUnlock() throws NoSuchFieldException, IOException, IllegalAccessException {
+    public void unlockTest() throws NoSuchFieldException, IOException, IllegalAccessException {
+
+        new MockUp<FileFactory>() {
+            @Mock
+            public boolean createNewLockFile(String filePath, FileFactory.FileType fileType) {
+                return true;
+            }
+
+            @Mock
+            public boolean isFileExist(String filePath, FileFactory.FileType fileType) throws IOException {
+                return false;
+            }
+            @Mock public DataOutputStream getDataOutputStreamUsingAppend(String path, FileFactory.FileType fileType) throws IOException {
+                return new FSDataOutputStream(new CarbonS3FileSystem.CarbonS3OutputStream(new AmazonS3Client(), new TransferManagerConfiguration(), "host", "key", f, false, CarbonS3FileSystem.CarbonS3SseType.S3, "keyID"));
+            }
+        };
+
+        new MockUp<Configured>() {
+            @Mock public Configuration getConf() {
+                return new Configuration();
+            }
+        };
+
+
+        new MockUp<CarbonS3FileSystem>() {
+            @Mock
+            public void initialize(URI uri, Configuration conf) {
+
+            }
+
+            @Mock public FileStatus getFileStatus(Path path) throws IOException {
+                return new FileStatus(128L, false, 0, 128L, 0L, new Path("lockFile"));
+            }
+        };
+
+        new MockUp<FSDataOutputStream>() {
+            @Mock public void close() {
+                return;
+            }
+        };
+
+        new MockUp<S3CarbonFile>() {
+            @Mock public boolean delete() {
+                return false;
+            }
+        };
+
+        new MockUp<S3CarbonFile>() {
+            @Mock public boolean delete() {
+                return true;
+            }
+        };
+
+        CarbonProperties carbonProperties = CarbonProperties.getInstance();
+        carbonProperties.addProperty(CarbonCommonConstants.STORE_LOCATION, "s3a://tmp");
+        CarbonTableIdentifier carbonTableIdentifier = new CarbonTableIdentifier("dbName", "tableName", "tableId");
+        S3FileLock s3FileLock = new S3FileLock(carbonTableIdentifier, "lockFile");
+
+
+        Field dataOutputStream = s3FileLock.getClass().getDeclaredField("dataOutputStream");
+        dataOutputStream.setAccessible(true);
+        dataOutputStream.set(s3FileLock, new FSDataOutputStream(new CarbonS3FileSystem.CarbonS3OutputStream(new AmazonS3Client(), new TransferManagerConfiguration(), "host", "key", f, false, CarbonS3FileSystem.CarbonS3SseType.S3, "keyID")));
+
+        assertTrue(s3FileLock.unlock());
+    }
+
+    @Test
+    public void unlockTestFailureCase() throws NoSuchFieldException, IOException, IllegalAccessException {
 
         new MockUp<FileFactory>() {
             @Mock
