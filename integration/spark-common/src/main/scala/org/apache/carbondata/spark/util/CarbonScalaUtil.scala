@@ -211,11 +211,14 @@ object CarbonScalaUtil {
           timeStampFormat.format(DateTimeUtils.stringToTime(value))
         case DateType =>
           dateFormat.format(DateTimeUtils.stringToTime(value))
+//        case IntegerType => value.toInt.toString
         case _ => value
       }
     } catch {
       case e: Exception =>
-        value
+//        val hiveDefaultPartition = "__HIVE_DEFAULT_PARTITION__"
+//        hiveDefaultPartition
+      value
     }
   }
 

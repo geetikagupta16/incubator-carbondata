@@ -222,6 +222,23 @@ class StandardPartitionTableLoadingTestCase extends QueryTest with BeforeAndAfte
     checkAnswer(sql("select distinct empno from loadstaticpartitionone"), Seq(Row(1)))
   }
 
+  test("data loading for partition table for one static partition column with invalid value") {
+    sql("drop table if exists loadstaticpartitionone")
+    sql(
+      """
+        | CREATE TABLE loadstaticpartitionone (empname String, designation String, doj Timestamp,
+        |  workgroupcategory int, workgroupcategoryname String, deptno int, deptname String,
+        |  projectcode int, projectjoindate Timestamp, projectenddate Timestamp,attendance int,
+        |  utilization int,salary int)
+        | PARTITIONED BY (empno int)
+        | STORED BY 'org.apache.carbondata.format'
+      """.stripMargin)
+
+    sql(s"""LOAD DATA local inpath '$resourcesPath/data.csv' INTO TABLE loadstaticpartitionone PARTITION(empno='xyz') OPTIONS('DELIMITER'= ',', 'QUOTECHAR'= '"')""")
+
+    checkAnswer(sql("select distinct empno from loadstaticpartitionone"), Seq(Row(null)))
+  }
+
   test("overwrite partition table for one static partition column with load syntax") {
     sql(
       """
@@ -361,6 +378,26 @@ class StandardPartitionTableLoadingTestCase extends QueryTest with BeforeAndAfte
     val df = sql("show partitions loadstaticpartitiononeissue")
     assert(df.collect().length == 1)
     checkExistence(df, true,  "empno=1")
+  }
+
+  test("load static partition table for one static partition column with invalid partition value") {
+    sql("drop table if exists loadstaticpartitiononeissue")
+    sql(
+      """
+        | CREATE TABLE loadstaticpartitiononeissue (empname String, designation String, doj Timestamp,
+        |  workgroupcategory int, workgroupcategoryname String, deptno int, deptname String,
+        |  projectcode int, projectjoindate Timestamp, projectenddate Timestamp,attendance int,
+        |  utilization int,salary int)
+        | PARTITIONED BY (empno int)
+        | STORED BY 'org.apache.carbondata.format'
+      """.stripMargin)
+
+    sql(s"""LOAD DATA local inpath '$resourcesPath/data.csv' INTO TABLE loadstaticpartitiononeissue PARTITION(empno='xyz')""")
+    val df = sql("show partitions loadstaticpartitiononeissue")
+    val result = df.collect()
+    assert(result.length == 1)
+    assert(result(0).get(0).asInstanceOf[String].equals("empno=__HIVE_DEFAULT_PARTITION__"))
+    checkExistence(df, true, "empno=__HIVE_DEFAULT_PARTITION__")
   }
 
   test("bad record test with null values") {

@@ -25,7 +25,18 @@ object CarbonSessionExample {
     val spark = ExampleUtils.createCarbonSession("CarbonSessionExample")
     spark.sparkContext.setLogLevel("WARN")
 
-    spark.sql("DROP TABLE IF EXISTS carbon_table")
+    spark.sql("drop table if exists uniqdata_timestamp")
+    spark.sql("CREATE TABLE uniqdata_timestamp (CUST_ID int,CUST_NAME String,ACTIVE_EMUI_VERSION " +
+              "string, DOJ timestamp, BIGINT_COLUMN1 bigint,BIGINT_COLUMN2 bigint,DECIMAL_COLUMN1" +
+              " decimal(30,10), DECIMAL_COLUMN2 decimal(36,10),Double_COLUMN1 double, " +
+              "Double_COLUMN2 double, INTEGER_COLUMN1 int) partitioned by(dob timestamp) STORED " +
+              "BY 'org.apache.carbondata.format' TBLPROPERTIES (\"TABLE_BLOCKSIZE\"= \"256 MB\")").show
+
+
+spark.sql("LOAD DATA INPATH 'hdfs://localhost:54311/Files/2000_UniqData.csv' into table uniqdata_timestamp partition(dob='fdsgfd') OPTIONS ('FILEHEADER'='CUST_ID,CUST_NAME ,ACTIVE_EMUI_VERSION,DOB,DOJ, BIGINT_COLUMN1, BIGINT_COLUMN2,DECIMAL_COLUMN1,DECIMAL_COLUMN2,Double_COLUMN1, Double_COLUMN2,INTEGER_COLUMN1','BAD_RECORDS_ACTION'='FORCE')")
+
+    spark.sql("select count(*) from uniqdata_timestamp").show
+    /*spark.sql("DROP TABLE IF EXISTS carbon_table")
 
     // Create table
     spark.sql(
@@ -116,7 +127,7 @@ object CarbonSessionExample {
 
     // Drop table
     spark.sql("DROP TABLE IF EXISTS carbon_table")
-
+*/
     spark.stop()
   }
 
