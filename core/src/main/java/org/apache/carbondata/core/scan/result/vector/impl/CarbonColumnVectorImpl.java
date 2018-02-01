@@ -93,7 +93,7 @@ public class CarbonColumnVectorImpl implements CarbonColumnVector {
       decimals = new BigDecimal[batchSize];
     } else if (dataType == DataTypes.STRING || dataType == DataTypes.BYTE_ARRAY) {
       bytes = new byte[batchSize][];
-      offsetVector = new int[batchSize+1];
+      offsetVector = new int[batchSize + 1];
     } else {
       data = new Object[batchSize];
     }
@@ -252,6 +252,9 @@ public class CarbonColumnVectorImpl implements CarbonColumnVector {
       Arrays.fill(decimals, null);
     } else if (dataType == DataTypes.STRING || dataType == DataTypes.BYTE_ARRAY) {
       Arrays.fill(bytes, null);
+      byteStr = null;
+      Arrays.fill(offsetVector, 0);
+      Arrays.fill(isNullVector, false);
     } else {
       Arrays.fill(data, null);
     }
