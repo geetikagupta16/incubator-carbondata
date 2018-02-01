@@ -24,7 +24,9 @@ import com.facebook.presto.spi.block.BlockBuilder;
 import com.facebook.presto.spi.block.BlockBuilderStatus;
 import com.facebook.presto.spi.block.DictionaryBlock;
 import com.facebook.presto.spi.block.SliceArrayBlock;
+import com.facebook.presto.spi.block.VariableWidthBlock;
 import com.facebook.presto.spi.type.Type;
+import io.airlift.slice.Slices;
 
 import static io.airlift.slice.Slices.utf8Slice;
 import static io.airlift.slice.Slices.wrappedBuffer;
@@ -69,13 +71,15 @@ public class SliceStreamReader extends AbstractStreamReader {
           }
           return new DictionaryBlock(batchSize, dictionarySliceArrayBlock, values);
         } else {
-          for (int i = 0; i < numberOfRows; i++) {
+
+          return new VariableWidthBlock(batchSize, Slices.wrappedBuffer((byte[])columnVector.getStringData()), columnVector.getOffsetVector(), columnVector.getIsNullVector());
+          /*for (int i = 0; i < numberOfRows; i++) {
             if (columnVector.isNullAt(i)) {
               builder.appendNull();
             } else {
               type.writeSlice(builder, wrappedBuffer((byte[]) columnVector.getData(i)));
             }
-          }
+          }*/
         }
       }
     } else {

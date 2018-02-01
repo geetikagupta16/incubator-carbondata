@@ -233,6 +233,7 @@ class PrestoAllDataTypeTest extends FunSuiteLike with BeforeAndAfterAll {
         "SELECT ID,DATE,COUNTRY,NAME,PHONETYPE,SERIALNAME,SALARY,BONUS FROM TESTDB.TESTTABLE " +
         "WHERE BONUS>=1234.444 GROUP BY ID,DATE,COUNTRY,NAME,PHONETYPE,SERIALNAME,SALARY," +
         "BONUS ORDER BY ID")
+    println(actualResult)
     val expectedResult: List[Map[String, Any]] = List(Map("ID" -> 1,
       "NAME" -> "anubhav",
       "BONUS" -> java.math.BigDecimal.valueOf(1234.4440).setScale(4),
