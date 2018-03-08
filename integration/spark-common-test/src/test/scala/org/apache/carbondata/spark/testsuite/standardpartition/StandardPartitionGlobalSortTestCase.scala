@@ -91,7 +91,7 @@ class StandardPartitionGlobalSortTestCase extends QueryTest with BeforeAndAfterA
         | STORED BY 'org.apache.carbondata.format' TBLPROPERTIES('SORT_SCOPE'='GLOBAL_SORT')
       """.stripMargin)
     sql(s"""insert into staticpartitionone PARTITION(empno='1') select empname,designation,doj,workgroupcategory,workgroupcategoryname,deptno,deptname,projectcode,projectjoindate,projectenddate,attendance,utilization,salary from originTable""")
-
+    checkAnswer(sql("select distinct empno from staticpartitionone"), Seq(Row(1)))
   }
 
   test("single pass loading for global sort partition table for one partition column") {
@@ -105,7 +105,7 @@ class StandardPartitionGlobalSortTestCase extends QueryTest with BeforeAndAfterA
         | STORED BY 'org.apache.carbondata.format' TBLPROPERTIES('SORT_SCOPE'='GLOBAL_SORT')
       """.stripMargin)
     sql(s"""LOAD DATA local inpath '$resourcesPath/data.csv' INTO TABLE singlepasspartitionone OPTIONS('DELIMITER'= ',', 'QUOTECHAR'= '"', 'SINGLE_PASS'='true')""")
-
+    checkAnswer(sql("select count(*) from singlepasspartitionone"), sql("select count(*) from originTable"))
   }
 
   test("data loading for global sort partition table for one static partition column with load syntax") {
@@ -220,17 +220,17 @@ class StandardPartitionGlobalSortTestCase extends QueryTest with BeforeAndAfterA
   test("global sort badrecords on partition column") {
     sql("create table badrecordsPartition(intField1 int, stringField1 string) partitioned by (intField2 int) stored by 'carbondata' TBLPROPERTIES('SORT_SCOPE'='GLOBAL_SORT')")
     sql(s"load data local inpath '$resourcesPath/data_partition_badrecords.csv' into table badrecordsPartition options('bad_records_action'='force')")
-    sql("select count(*) from badrecordsPartition").show()
     checkAnswer(sql("select count(*) cnt from badrecordsPartition where intfield2 is null"), Seq(Row(9)))
     checkAnswer(sql("select count(*) cnt from badrecordsPartition where intfield2 is not null"), Seq(Row(2)))
+    checkAnswer(sql("select count(*) cnt from badrecordsPartition where intfield2 = 13"), Seq(Row(1)))
   }
 
   test("global sort badrecords fail on partition column") {
     sql("create table badrecordsPartitionfail(intField1 int, stringField1 string) partitioned by (intField2 int) stored by 'carbondata' TBLPROPERTIES('SORT_SCOPE'='GLOBAL_SORT')")
-    intercept[Exception] {
+    val exceptionMsg = intercept[Exception] {
       sql(s"load data local inpath '$resourcesPath/data_partition_badrecords.csv' into table badrecordsPartitionfail options('bad_records_action'='fail')")
-
     }
+    assert(exceptionMsg.getMessage.startsWith("DataLoad failure: Data load failed due to bad record:"))
   }
 
   test("global sort badrecords ignore on partition column") {
@@ -243,11 +243,7 @@ class StandardPartitionGlobalSortTestCase extends QueryTest with BeforeAndAfterA
   }
 
 
-  test("global sort test partition fails on int null partition") {
-    sql("create table badrecordsPartitionintnull(intField1 int, stringField1 string) partitioned by (intField2 int) stored by 'carbondata' TBLPROPERTIES('SORT_SCOPE'='GLOBAL_SORT')")
-    sql(s"load data local inpath '$resourcesPath/data_partition_badrecords.csv' into table badrecordsPartitionintnull options('bad_records_action'='force')")
-    checkAnswer(sql("select count(*) cnt from badrecordsPartitionintnull where intfield2 = 13"), Seq(Row(1)))
-  }
+
 
   test("global sort test partition fails on int null partition read alternate") {
     CarbonProperties.getInstance().addProperty(CarbonCommonConstants.CARBON_READ_PARTITION_HIVE_DIRECT, "false")
@@ -322,10 +318,10 @@ class StandardPartitionGlobalSortTestCase extends QueryTest with BeforeAndAfterA
 
     checkAnswer(sql(s"select count(*) from insertstaticpartitiondynamic where empno=1"), rows)
 
-    intercept[Exception] {
+    val exceptionMsg = intercept[Exception] {
       sql("""insert overwrite table insertstaticpartitiondynamic PARTITION(empno, empname='ravi') select designation, doj, salary, empname from insertstaticpartitiondynamic""")
     }
-
+    assertResult("The ordering of partition columns is [empno,empname]. All partition columns having constant values need to appear before other partition columns that do not have an assigned constant value.;")(exceptionMsg.getMessage)
   }
 
   test("overwriting global sort all partition on table and do compaction") {
@@ -655,10 +651,11 @@ class StandardPartitionGlobalSortTestCase extends QueryTest with BeforeAndAfterA
 
   test("partition with int issue and dictionary include") {
     sql("drop table if exists partdatecarb3")
-    intercept[Exception] {
+    val exceptionMsg = intercept[Exception] {
       sql(
         "create table partdatecarb3(name string, dob string) partitioned by(age Int) stored by 'carbondata' TBLPROPERTIES('DICTIONARY_INCLUDE'='age')")
     }
+    assertResult("operation failed for default.partdatecarb3: Create table'partdatecarb3' in database 'default' failed, operation failed for default.partdatecarb3: Dictionary include cannot be applied on partition columns")(exceptionMsg.getMessage)
   }
 
   test("data loading for all dimensions with table for two partition column") {
@@ -696,10 +693,11 @@ class StandardPartitionGlobalSortTestCase extends QueryTest with BeforeAndAfterA
       sql("insert into partdatecarb4 partition(city,state,country='india') select 'name1',12, 'BGLR','KA'")
       sql("select * from partdatecarb4").show()
       checkAnswer(sql("select * from partdatecarb4"), sql("select * from partdatecarb4_hive"))
-      intercept[Exception] {
+      val exceptionMsg = intercept[Exception] {
         sql(
           "insert into partdatecarb4 partition(state,city='3',country) select 'name1',12,'cc', 'dd'")
       }
+      assertResult("The ordering of partition columns is [country,state,city]. All partition columns having constant values need to appear before other partition columns that do not have an assigned constant value.;")(exceptionMsg.getMessage)
     } finally {
       CarbonProperties.getInstance().addProperty(
         CarbonCommonConstants.CARBON_BAD_RECORDS_ACTION, LoggerAction.FORCE.name())
@@ -777,14 +775,15 @@ class StandardPartitionGlobalSortTestCase extends QueryTest with BeforeAndAfterA
         | PARTITIONED BY (projectjoindate Timestamp, salary decimal)
         | STORED BY 'org.apache.carbondata.format' TBLPROPERTIES('SORT_SCOPE'='GLOBAL_SORT')
       """.stripMargin)
-    intercept[MalformedCarbonCommandException] {
+    val exceptionMsg = intercept[MalformedCarbonCommandException] {
       sql(s"""LOAD DATA local inpath '$resourcesPath/data.csv' INTO TABLE partitionwrongformat partition(projectjoindate='2016-12-01',salary='gg') OPTIONS('DELIMITER'= ',', 'QUOTECHAR'= '"')""")
     }
+    assertResult("Value gg with datatype DecimalType(10,0) on static partition is not correct")(exceptionMsg.getMessage)
 
-    intercept[MalformedCarbonCommandException] {
+   val msg = intercept[MalformedCarbonCommandException] {
       sql(s"""LOAD DATA local inpath '$resourcesPath/data.csv' INTO TABLE partitionwrongformat partition(projectjoindate='2016',salary='1.0') OPTIONS('DELIMITER'= ',', 'QUOTECHAR'= '"')""")
     }
-
+    assertResult("Value 2016 with datatype TimestampType on static partition is not correct")(msg.getMessage)
   }
 
   test("data loading with default partition in static partition table") {
@@ -859,12 +858,14 @@ class StandardPartitionGlobalSortTestCase extends QueryTest with BeforeAndAfterA
     sql("create table scalarissue_hive(a int,salary double) using parquet partitioned by (salary) ")
     sql("set hive.exec.dynamic.partition.mode=nonstrict")
     sql("insert into scalarissue_hive values(23,21.2)")
-    intercept[Exception] {
+    val msg1 = intercept[Exception] {
       sql(s"select * from scalarissue_hive where salary = (select max(salary) from scalarissue_hive)").show()
     }
-    intercept[Exception] {
+    assert(msg1.getMessage.contains("Cannot evaluate expression: scalar-subquery"))
+    val msg2 = intercept[Exception] {
       sql(s"select * from scalarissue where salary = (select max(salary) from scalarissue)").show()
     }
+    assert(msg2.getMessage.contains("Cannot evaluate expression: scalar-subquery"))
   }
 
   test("global sort badrecords fail on partition column message") {
@@ -873,7 +874,7 @@ class StandardPartitionGlobalSortTestCase extends QueryTest with BeforeAndAfterA
     val ex = intercept[Exception] {
       sql(s"load data local inpath '$resourcesPath/data_partition_badrecords.csv' into table badrecordsPartitionfailmessage options('bad_records_action'='fail')")
     }
-    println(ex.getMessage.startsWith("DataLoad failure: Data load failed due to bad record"))
+    assert(ex.getMessage.startsWith("DataLoad failure: Data load failed due to bad record"))
   }
 
   test("multiple compaction on partition table") {

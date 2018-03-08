@@ -214,7 +214,6 @@ class StandardPartitionBadRecordLoggerTest extends QueryTest with BeforeAndAfter
     sql("drop table IF EXISTS emptyColumnValues_false")
     sql("drop table IF EXISTS empty_timestamp")
     sql("drop table IF EXISTS empty_timestamp_false")
-    sql("drop table IF EXISTS dataloadOptionTests")
   }
 
   override def afterAll {
