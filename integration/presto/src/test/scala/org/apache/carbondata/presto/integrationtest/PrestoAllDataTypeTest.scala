@@ -36,15 +36,18 @@ class PrestoAllDataTypeTest extends FunSuiteLike with BeforeAndAfterAll {
 
   override def beforeAll: Unit = {
     import org.apache.carbondata.presto.util.CarbonDataStoreCreator
-    CarbonDataStoreCreator
+    /*CarbonDataStoreCreator
       .createCarbonStore(storePath,
         s"$rootPath/integration/presto/src/test/resources/alldatatype.csv")
-    logger.info(s"\nCarbon store is created at location: $storePath")
-    PrestoServer.startServer(storePath)
+    logger.info(s"\nCarbon store is created at location: $storePath")*/
+    PrestoServer.startServer("/home/geetika/Workspace/incubator-carbondata/examples/spark2/target/store")
   }
 
   override def afterAll(): Unit = {
     PrestoServer.stopServer()
+  }
+  test("test") {
+    println(PrestoServer.executeQuery("select * from partitionone where empno=11"))
   }
 
   test("test the result for count(*) in presto") {

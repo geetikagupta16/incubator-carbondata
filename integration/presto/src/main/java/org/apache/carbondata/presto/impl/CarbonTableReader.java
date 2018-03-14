@@ -31,17 +31,22 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import org.apache.carbondata.core.datamap.DataMapStoreManager;
+import org.apache.carbondata.core.datamap.Segment;
 import org.apache.carbondata.core.datastore.filesystem.CarbonFile;
 import org.apache.carbondata.core.datastore.impl.FileFactory;
+import org.apache.carbondata.core.indexstore.PartitionSpec;
 import org.apache.carbondata.core.metadata.AbsoluteTableIdentifier;
 import org.apache.carbondata.core.metadata.CarbonMetadata;
 import org.apache.carbondata.core.metadata.CarbonTableIdentifier;
+import org.apache.carbondata.core.metadata.SegmentFileStore;
 import org.apache.carbondata.core.metadata.converter.SchemaConverter;
 import org.apache.carbondata.core.metadata.converter.ThriftWrapperSchemaConverterImpl;
 import org.apache.carbondata.core.metadata.schema.table.CarbonTable;
 import org.apache.carbondata.core.metadata.schema.table.TableInfo;
 import org.apache.carbondata.core.reader.ThriftReader;
 import org.apache.carbondata.core.scan.expression.Expression;
+import org.apache.carbondata.core.statusmanager.LoadMetadataDetails;
+import org.apache.carbondata.core.statusmanager.SegmentStatusManager;
 import org.apache.carbondata.core.util.path.CarbonTablePath;
 import org.apache.carbondata.hadoop.CarbonInputSplit;
 import org.apache.carbondata.hadoop.api.CarbonTableInputFormat;
@@ -381,8 +386,20 @@ public class CarbonTableReader {
       CarbonTableInputFormat carbonTableInputFormat =
               createInputFormat(config, carbonTable.getAbsoluteTableIdentifier(), filters);
       JobConf jobConf = new JobConf(config);
+
+//Segment[] segments = carbonTableInputFormat.getSegmentsToAccess(job);
+
+      LoadMetadataDetails[] loadMetadataDetails = SegmentStatusManager
+          .readTableStatusFile(CarbonTablePath.getTableStatusFilePath(carbonTable.getTablePath()));
+    SegmentFileStore segmentFileStore = new SegmentFileStore(carbonTable.getTablePath(), loadMetadataDetails[0].getSegmentFile());
+      List<PartitionSpec> partitionSpecs = segmentFileStore.getPartitionSpecs();
+
+      if (partitionSpecs != null) {
+        CarbonTableInputFormat.setPartitionsToPrune(jobConf, partitionSpecs);
+      }
       Job job = Job.getInstance(jobConf);
       List<InputSplit> splits = carbonTableInputFormat.getSplits(job);
+
       CarbonInputSplit carbonInputSplit = null;
       Gson gson = new Gson();
       if (splits != null && splits.size() > 0) {
