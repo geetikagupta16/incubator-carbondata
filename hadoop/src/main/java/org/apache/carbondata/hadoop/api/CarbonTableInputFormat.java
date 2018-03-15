@@ -164,7 +164,7 @@ public class CarbonTableInputFormat<T> extends FileInputFormat<Void, T> {
   /**
    * Get the cached CarbonTable or create it by TableInfo in `configuration`
    */
-  private CarbonTable getOrCreateCarbonTable(Configuration configuration) throws IOException {
+  public CarbonTable getOrCreateCarbonTable(Configuration configuration) throws IOException {
     if (carbonTable == null) {
       // carbon table should be created either from deserialized table info (schema saved in
       // hive metastore) or by reading schema in HDFS (schema saved in HDFS)
@@ -460,7 +460,7 @@ public class CarbonTableInputFormat<T> extends FileInputFormat<Void, T> {
    * Return segment list after filtering out valid segments and segments set by user by
    * `INPUT_SEGMENT_NUMBERS` in job configuration
    */
-  private List<Segment> getFilteredSegment(JobContext job, List<Segment> validSegments) {
+  public List<Segment> getFilteredSegment(JobContext job, List<Segment> validSegments) {
     Segment[] segmentsToAccess = getSegmentsToAccess(job);
     List<Segment> segmentToAccessSet =
         new ArrayList<>(new HashSet<>(Arrays.asList(segmentsToAccess)));
@@ -641,7 +641,7 @@ public class CarbonTableInputFormat<T> extends FileInputFormat<Void, T> {
    * @param oldPartitionIdList  only used in alter table command
    * @return
    */
-  private BitSet setMatchedPartitions(String partitionIds, Expression filter,
+  public BitSet setMatchedPartitions(String partitionIds, Expression filter,
       PartitionInfo partitionInfo, List<Integer> oldPartitionIdList) {
     BitSet matchedPartitions = null;
     if (null != partitionIds) {
@@ -668,7 +668,7 @@ public class CarbonTableInputFormat<T> extends FileInputFormat<Void, T> {
    * @return
    * @throws IOException
    */
-  private List<InputSplit> getSplits(JobContext job, FilterResolverIntf filterResolver,
+  public List<InputSplit> getSplits(JobContext job, FilterResolverIntf filterResolver,
       List<Segment> validSegments, BitSet matchedPartitions, PartitionInfo partitionInfo,
       List<Integer> oldPartitionIdList, SegmentUpdateStatusManager updateStatusManager)
       throws IOException {
@@ -716,7 +716,7 @@ public class CarbonTableInputFormat<T> extends FileInputFormat<Void, T> {
     return result;
   }
 
-  protected Expression getFilterPredicates(Configuration configuration) {
+  public Expression getFilterPredicates(Configuration configuration) {
     try {
       String filterExprString = configuration.get(FILTER_PREDICATE);
       if (filterExprString == null) {

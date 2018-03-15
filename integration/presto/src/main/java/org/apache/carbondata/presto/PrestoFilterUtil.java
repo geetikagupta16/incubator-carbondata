@@ -29,6 +29,8 @@ import java.util.stream.Collectors;
 
 import org.apache.carbondata.core.metadata.datatype.DataType;
 import org.apache.carbondata.core.metadata.datatype.DataTypes;
+import org.apache.carbondata.core.metadata.schema.table.CarbonTable;
+import org.apache.carbondata.core.metadata.schema.table.column.ColumnSchema;
 import org.apache.carbondata.core.scan.expression.ColumnExpression;
 import org.apache.carbondata.core.scan.expression.Expression;
 import org.apache.carbondata.core.scan.expression.LiteralExpression;
@@ -43,6 +45,7 @@ import org.apache.carbondata.core.scan.expression.logical.AndExpression;
 import org.apache.carbondata.core.scan.expression.logical.OrExpression;
 
 import com.facebook.presto.spi.ColumnHandle;
+import com.facebook.presto.spi.PrestoException;
 import com.facebook.presto.spi.predicate.Domain;
 import com.facebook.presto.spi.predicate.Range;
 import com.facebook.presto.spi.predicate.TupleDomain;
@@ -60,7 +63,9 @@ import com.facebook.presto.spi.type.VarcharType;
 import com.google.common.collect.ImmutableList;
 import io.airlift.slice.Slice;
 
+import static com.facebook.presto.spi.StandardErrorCode.NOT_SUPPORTED;
 import static com.google.common.base.Preconditions.checkArgument;
+import static java.util.stream.Collectors.toList;
 
 /**
  * PrestoFilterUtil create the carbonData Expression from the presto-domain
@@ -86,6 +91,39 @@ public class PrestoFilterUtil {
     else return DataTypes.STRING;
   }
 
+  public static List<String> getPartitionFilters(CarbonTable carbonTable, TupleDomain<ColumnHandle> originalConstraint) {
+    List<ColumnSchema> columnSchemas = carbonTable.getPartitionInfo().getColumnSchemaList();
+
+    List<String> filter = new ArrayList<>();
+
+    final String HIVE_DEFAULT_DYNAMIC_PARTITION = "__HIVE_DEFAULT_PARTITION__";
+    final String PARTITION_VALUE_WILDCARD = "";
+
+    for (ColumnHandle c : originalConstraint.getDomains().get().keySet()) {
+      CarbondataColumnHandle cdch = (CarbondataColumnHandle) c;
+      List<ColumnSchema> partitionedColumnSchema = columnSchemas.stream()
+          .filter(columnSchema -> cdch.getColumnName().equals(columnSchema.getColumnName()))
+          .collect(toList());
+      if (partitionedColumnSchema.size() != 0) {
+        Domain domain = originalConstraint.getDomains().get().get(cdch);
+        if (domain != null && domain.isNullableSingleValue()) {
+          Object value = domain.getNullableSingleValue();
+          if (value == null) {
+            filter.add(cdch.getColumnName()+"="+HIVE_DEFAULT_DYNAMIC_PARTITION);
+          } else if (value instanceof Slice) {
+            filter.add(cdch.getColumnName()+"="+((Slice) value).toStringUtf8());
+          } else if ((value instanceof Boolean) || (value instanceof Double)
+              || (value instanceof Long)) {
+            filter.add(cdch.getColumnName()+"="+value.toString());
+          }
+        } else {
+          filter.add(cdch.getColumnName()+"="+PARTITION_VALUE_WILDCARD);
+        }
+      }
+    }
+    return filter;
+  }
+
   /**
    * Convert presto-TupleDomain predication into Carbon scan express condition
    *
@@ -102,6 +140,7 @@ public class PrestoFilterUtil {
       // Build ColumnExpression for Expression(Carbondata)
       CarbondataColumnHandle cdch = (CarbondataColumnHandle) c;
       Type type = cdch.getColumnType();
+
 
       DataType coltype = Spi2CarbondataTypeMapper(cdch);
       Expression colExpression = new ColumnExpression(cdch.getColumnName(), coltype);
@@ -176,7 +215,7 @@ public class PrestoFilterUtil {
         ListExpression candidates = null;
         List<Expression> exs = singleValues.stream()
             .map((a) -> new LiteralExpression(a, coltype))
-            .collect(Collectors.toList());
+            .collect(toList());
         candidates = new ListExpression(exs);
         filters.add(new InExpression(colExpression, candidates));
       } else if (valueExpressionMap.size() > 0) {
@@ -258,6 +297,7 @@ public class PrestoFilterUtil {
 
     return rawdata;
   }
+
 
   /**
    * get the filters from key
