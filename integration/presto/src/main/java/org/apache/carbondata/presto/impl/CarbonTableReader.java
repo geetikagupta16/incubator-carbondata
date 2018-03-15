@@ -22,6 +22,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.BitSet;
 import java.util.Calendar;
+import java.util.Collection;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -61,12 +62,15 @@ import org.apache.carbondata.core.util.path.CarbonTablePath;
 import org.apache.carbondata.hadoop.CarbonInputSplit;
 import org.apache.carbondata.hadoop.api.CarbonTableInputFormat;
 import org.apache.carbondata.hadoop.util.CarbonInputFormatUtil;
+import org.apache.carbondata.presto.PrestoFilterUtil;
 
 import com.facebook.presto.hadoop.$internal.com.google.gson.Gson;
 import com.facebook.presto.hadoop.$internal.io.netty.util.internal.ConcurrentSet;
+import com.facebook.presto.spi.ColumnHandle;
 import com.facebook.presto.spi.SchemaTableName;
 import com.facebook.presto.spi.TableNotFoundException;
 import com.facebook.presto.spi.classloader.ThreadContextClassLoader;
+import com.facebook.presto.spi.predicate.TupleDomain;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.inject.Inject;
@@ -81,6 +85,7 @@ import org.apache.hadoop.mapreduce.JobContext;
 import org.apache.thrift.TBase;
 
 import static java.util.Objects.requireNonNull;
+import static java.util.stream.Collectors.toList;
 
 /**
  * CarbonTableReader will be a facade of these utils
@@ -385,7 +390,7 @@ public class CarbonTableReader {
 
 
   public List<CarbonLocalInputSplit> getInputSplits2(CarbonTableCacheModel tableCacheModel,
-      Expression filters)  {
+      Expression filters, TupleDomain<ColumnHandle> constraints)  {
     List<CarbonLocalInputSplit> result = new ArrayList<>();
 
     CarbonTable carbonTable = tableCacheModel.carbonTable;
@@ -412,10 +417,30 @@ public class CarbonTableReader {
         partitionSpecs.addAll(segmentFileStore.getPartitionSpecs());
       }
 
+      List<String> partitionValues = PrestoFilterUtil.getPartitionFilters(carbonTable, constraints);
+
+      List<String> partitions =
+          partitionSpecs.parallelStream().map(PartitionSpec::getPartitions).collect(toList()).stream().flatMap(Collection::stream).collect(Collectors.toList());
+      List<PartitionSpec> partitionSpecs2 = new ArrayList(partitionSpecs);
+
+      List<PartitionSpec> partitionSpecsUpdated = new ArrayList();
+
+
+      for(int i =0;i<partitions.size();i++){
+    if(partitions.get(i).contains(partitionValues.get(i)))
+    {
+     partitionSpecsUpdated.add(partitionSpecs2.get(i));
+    }
+    //partitionSpecs.toArray()
+    System.out.println("*******"+partitions.get(i));
+  }
+
+
       if (partitionSpecs != null) {
-        CarbonTableInputFormat.setPartitionsToPrune(jobConf, new ArrayList<>(partitionSpecs));
+        CarbonTableInputFormat.setPartitionsToPrune(jobConf, new ArrayList<>(partitionSpecsUpdated));
       }
       Job job = Job.getInstance(jobConf);
+
 
       List<InputSplit> splits = getSplits(job);
 
