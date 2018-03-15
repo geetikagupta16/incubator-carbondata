@@ -429,17 +429,24 @@ public class CarbonTableReader {
 
         List<String> partitionsNames =
             partitionSpecs.stream().map(PartitionSpec::getPartitions).collect(toList()).stream().flatMap(Collection::stream).collect(Collectors.toList());
+        List<List<String>> partitionSpecNamesList = partitionSpecs.stream().map(x->x.getPartitions()).collect(Collectors.toList());
         List<PartitionSpec> partitionSpecsList = new ArrayList(partitionSpecs);
 
         List<PartitionSpec> filteredPartitions = new ArrayList();
 
-        for (String partitionValue : partitionValuesFromExpression) {
+        for(List<String> part: partitionSpecNamesList) {
+          if(part.containsAll(partitionValuesFromExpression)) {
+            filteredPartitions.add(partitionSpecsList.get(partitionSpecNamesList.indexOf(part)));
+
+          }
+        }
+        /*for (String partitionValue : partitionValuesFromExpression) {
           int index = partitionsNames.indexOf(partitionValue);
           if (index != -1) {
             filteredPartitions.add(partitionSpecsList.get(index));
 
           }
-        }
+        }*/
         CarbonTableInputFormat.setPartitionsToPrune(jobConf, new ArrayList<>(filteredPartitions));
 
       }
