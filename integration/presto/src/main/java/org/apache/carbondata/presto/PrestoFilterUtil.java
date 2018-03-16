@@ -119,20 +119,21 @@ public class PrestoFilterUtil {
               .equals(DateType.DATE)) {
             Calendar c = Calendar.getInstance();
             c.setTime(new java.sql.Date(0));
-            c.add(Calendar.DAY_OF_YEAR, (Integer) ((Long) value).intValue());
+            c.add(Calendar.DAY_OF_YEAR, ((Long) value).intValue());
             java.sql.Date date = new java.sql.Date(c.getTime().getTime());
             filter.add(carbondataColumnHandle.getColumnName() + "=" + date.toString());
           } else if (value instanceof Long && carbondataColumnHandle.getColumnType()
               .equals(TimestampType.TIMESTAMP)) {
             filter.add(carbondataColumnHandle.getColumnName() + "=" + new Timestamp((Long) value).toString());
-          } else if ((value instanceof Boolean) || (value instanceof Double)) {
-            filter.add(carbondataColumnHandle.getColumnName() + "=" + ((Slice) value).toStringUtf8());
+          } else if ((value instanceof Boolean) || (value instanceof Double) || (value instanceof Long)) {
+            filter.add(value.toString());
           } else {
             filter.add(carbondataColumnHandle.getColumnName() + "=" + PARTITION_VALUE_WILDCARD);
           }
         }
       }
     }
+
     return filter;
   }
 
