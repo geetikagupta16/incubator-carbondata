@@ -470,13 +470,6 @@ public class CarbonTableReader {
         filteredPartitions.add(partitionSpecsList.get(partitionSpecNamesList.indexOf(partitionSpecNames)));
       }
     }
-        /*for (String partitionValue : partitionValuesFromExpression) {
-          int index = partitionsNames.indexOf(partitionValue);
-          if (index != -1) {
-            filteredPartitions.add(partitionSpecsList.get(index));
-
-          }
-        }*/
     CarbonTableInputFormat.setPartitionsToPrune(jobConf, new ArrayList<>(filteredPartitions));
   }
 
