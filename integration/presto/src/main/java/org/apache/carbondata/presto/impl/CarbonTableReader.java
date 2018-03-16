@@ -124,8 +124,14 @@ public class CarbonTableReader {
 
   private CarbonTableInputFormat carbonTableInputFormat;
 
+  /**
+   * loadMetadetails of all segments
+   */
   private  LoadMetadataDetails[] loadMetadataDetails;
 
+  /**
+   * partition info a carbon table
+   */
   private  PartitionInfo partitionInfo;
 
   @Inject public CarbonTableReader(CarbonTableConfig config) {
@@ -390,7 +396,12 @@ public class CarbonTableReader {
     return result;
   }
 
-
+  /**
+   * @param tableCacheModel
+   * @param filters
+   * @param constraints
+   * @return
+   */
   public List<CarbonLocalInputSplit> getInputSplits2(CarbonTableCacheModel tableCacheModel,
       Expression filters, TupleDomain<ColumnHandle> constraints)  {
     List<CarbonLocalInputSplit> result = new ArrayList<>();
@@ -445,6 +456,12 @@ public class CarbonTableReader {
     return result;
   }
 
+  /**
+   * @param constraints
+   * @param carbonTable
+   * @param jobConf
+   * @throws IOException
+   */
   private void setPartitionsToPrune(TupleDomain<ColumnHandle> constraints, CarbonTable carbonTable,
       JobConf jobConf) throws IOException {
     Set<PartitionSpec> partitionSpecs = new HashSet<>();
