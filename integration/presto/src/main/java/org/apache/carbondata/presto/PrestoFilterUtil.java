@@ -66,7 +66,6 @@ import com.facebook.presto.spi.type.VarcharType;
 import com.google.common.collect.ImmutableList;
 import io.airlift.slice.Slice;
 
-import static com.facebook.presto.spi.StandardErrorCode.NOT_SUPPORTED;
 import static com.google.common.base.Preconditions.checkArgument;
 import static java.util.stream.Collectors.toList;
 
@@ -77,6 +76,13 @@ public class PrestoFilterUtil {
 
   private static Map<Integer, Expression> filterMap = new HashMap<>();
 
+  private final static String HIVE_DEFAULT_DYNAMIC_PARTITION = "__HIVE_DEFAULT_PARTITION__";
+  private final static String PARTITION_VALUE_WILDCARD = "";
+
+  /**
+   * @param carbondataColumnHandle
+   * @return
+   */
   private static DataType Spi2CarbondataTypeMapper(CarbondataColumnHandle carbondataColumnHandle) {
     Type colType = carbondataColumnHandle.getColumnType();
     if (colType == BooleanType.BOOLEAN) return DataTypes.BOOLEAN;
@@ -94,45 +100,70 @@ public class PrestoFilterUtil {
     else return DataTypes.STRING;
   }
 
+  /**
+   * return partition filters using domain constraints
+   * @param carbonTable
+   * @param originalConstraint
+   * @return
+   */
   public static List<String> getPartitionFilters(CarbonTable carbonTable, TupleDomain<ColumnHandle> originalConstraint) {
     List<ColumnSchema> columnSchemas = carbonTable.getPartitionInfo().getColumnSchemaList();
 
     List<String> filter = new ArrayList<>();
 
-    final String HIVE_DEFAULT_DYNAMIC_PARTITION = "__HIVE_DEFAULT_PARTITION__";
-    final String PARTITION_VALUE_WILDCARD = "";
-
     for (ColumnHandle columnHandle : originalConstraint.getDomains().get().keySet()) {
       CarbondataColumnHandle carbondataColumnHandle = (CarbondataColumnHandle) columnHandle;
       List<ColumnSchema> partitionedColumnSchema = columnSchemas.stream().filter(
           columnSchema -> carbondataColumnHandle.getColumnName().equals(columnSchema.getColumnName())).collect(toList());
-      if (partitionedColumnSchema.size() != 0) {
-        Domain domain = originalConstraint.getDomains().get().get(carbondataColumnHandle);
-        if (domain != null && domain.isNullableSingleValue()) {
-          Object value = domain.getNullableSingleValue();
-          if (value == null) {
-            filter.add(carbondataColumnHandle.getColumnName() + "=" + HIVE_DEFAULT_DYNAMIC_PARTITION);
+      filter.addAll(createPartitionFilters(originalConstraint, carbondataColumnHandle, partitionedColumnSchema));
+    }
+    return filter;
+  }
+
+  /**
+   * @param originalConstraint
+   * @param carbonDataColumnHandle
+   * @param partitionedColumnSchema
+   */
+  private static List<String> createPartitionFilters(TupleDomain<ColumnHandle> originalConstraint,
+      CarbondataColumnHandle carbonDataColumnHandle, List<ColumnSchema> partitionedColumnSchema) {
+    List<String> filter = new ArrayList<>();
+    if (partitionedColumnSchema.size() != 0) {
+      Domain domain = originalConstraint.getDomains().get().get(carbonDataColumnHandle);
+      if (domain != null && domain.isNullableSingleValue()) {
+        Object value = domain.getNullableSingleValue();
+        if (value == null) {
+          filter.add(carbonDataColumnHandle.getColumnName() + "=" + HIVE_DEFAULT_DYNAMIC_PARTITION);
+        } else if(carbonDataColumnHandle.getColumnType() instanceof DecimalType) {
+          int scale = ((DecimalType) carbonDataColumnHandle.getColumnType()).getScale();
+          if (value instanceof Long) {
+            //create decimal value from Long
+            BigDecimal decimalValue = new BigDecimal(new BigInteger(String.valueOf(value)), scale);
+            filter.add(carbonDataColumnHandle.getColumnName() + "=" + decimalValue.toString());
           } else if (value instanceof Slice) {
-            filter.add(carbondataColumnHandle.getColumnName() + "=" + ((Slice) value).toStringUtf8());
-          } else if (value instanceof Long && carbondataColumnHandle.getColumnType()
-              .equals(DateType.DATE)) {
-            Calendar c = Calendar.getInstance();
-            c.setTime(new java.sql.Date(0));
-            c.add(Calendar.DAY_OF_YEAR, ((Long) value).intValue());
-            java.sql.Date date = new java.sql.Date(c.getTime().getTime());
-            filter.add(carbondataColumnHandle.getColumnName() + "=" + date.toString());
-          } else if (value instanceof Long && carbondataColumnHandle.getColumnType()
-              .equals(TimestampType.TIMESTAMP)) {
-            filter.add(carbondataColumnHandle.getColumnName() + "=" + new Timestamp((Long) value).toString());
-          } else if ((value instanceof Boolean) || (value instanceof Double) || (value instanceof Long)) {
-            filter.add(carbondataColumnHandle.getColumnName() + "=" + value.toString());
-          } else {
-            filter.add(carbondataColumnHandle.getColumnName() + "=" + PARTITION_VALUE_WILDCARD);
+            //create decimal value from Slice
+            BigDecimal decimalValue = new BigDecimal(Decimals.decodeUnscaledValue((Slice) value), scale);
+            filter.add(carbonDataColumnHandle.getColumnName() + "=" + decimalValue.toString());
           }
+        } else if (value instanceof Slice) {
+          filter.add(carbonDataColumnHandle.getColumnName() + "=" + ((Slice) value).toStringUtf8());
+        } else if (value instanceof Long && carbonDataColumnHandle.getColumnType()
+            .equals(DateType.DATE)) {
+          Calendar c = Calendar.getInstance();
+          c.setTime(new java.sql.Date(0));
+          c.add(Calendar.DAY_OF_YEAR, ((Long) value).intValue());
+          java.sql.Date date = new java.sql.Date(c.getTime().getTime());
+          filter.add(carbonDataColumnHandle.getColumnName() + "=" + date.toString());
+        } else if (value instanceof Long && carbonDataColumnHandle.getColumnType()
+            .equals(TimestampType.TIMESTAMP)) {
+          filter.add(carbonDataColumnHandle.getColumnName() + "=" + new Timestamp((Long) value).toString());
+        } else if ((value instanceof Boolean) || (value instanceof Double) || (value instanceof Long)) {
+          filter.add(carbonDataColumnHandle.getColumnName() + "=" + value.toString());
+        } else {
+          filter.add(carbonDataColumnHandle.getColumnName() + "=" + PARTITION_VALUE_WILDCARD);
         }
       }
     }
-
     return filter;
   }
 
@@ -285,7 +316,6 @@ public class PrestoFilterUtil {
       } else {
         return rawdata;
       }
-
     } else if (type.equals(BooleanType.BOOLEAN)) return rawdata;
     else if (type.equals(DateType.DATE)) {
       Calendar c = Calendar.getInstance();
