@@ -421,6 +421,7 @@ public class CarbonTableReader {
 
       Job job = Job.getInstance(jobConf);
 
+
       List<InputSplit> splits = getSplits(job);
 
       CarbonInputSplit carbonInputSplit ;
@@ -465,7 +466,7 @@ public class CarbonTableReader {
     List<PartitionSpec> filteredPartitions = new ArrayList();
 
     for(List<String> partitionSpecNames: partitionSpecNamesList) {
-      if(partitionSpecNames.containsAll(partitionValuesFromExpression)) {
+      if(partitionSpecNames.containsAll(partitionValuesFromExpression) && partitionSpecNames.size() == partitionValuesFromExpression.size()) {
         filteredPartitions.add(partitionSpecsList.get(partitionSpecNamesList.indexOf(partitionSpecNames)));
       }
     }
@@ -479,7 +480,7 @@ public class CarbonTableReader {
     CarbonTableInputFormat.setPartitionsToPrune(jobConf, new ArrayList<>(filteredPartitions));
   }
 
-  private List<InputSplit> getSplits(JobContext job) throws IOException {
+  public List<InputSplit> getSplits(JobContext job) throws IOException {
     AbsoluteTableIdentifier identifier = carbonTableInputFormat.getAbsoluteTableIdentifier(job.getConfiguration());
 
     SegmentUpdateStatusManager updateStatusManager =
