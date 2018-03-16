@@ -466,7 +466,7 @@ public class CarbonTableReader {
     List<PartitionSpec> filteredPartitions = new ArrayList();
 
     for(List<String> partitionSpecNames: partitionSpecNamesList) {
-      if(partitionSpecNames.containsAll(partitionValuesFromExpression) && partitionSpecNames.size() == partitionValuesFromExpression.size()) {
+      if(partitionSpecNames.containsAll(partitionValuesFromExpression)) {
         filteredPartitions.add(partitionSpecsList.get(partitionSpecNamesList.indexOf(partitionSpecNames)));
       }
     }
