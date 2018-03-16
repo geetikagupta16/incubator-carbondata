@@ -19,6 +19,9 @@ package org.apache.carbondata.presto;
 
 import java.math.BigDecimal;
 import java.math.BigInteger;
+import java.sql.Timestamp;
+import java.text.DateFormat;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Date;
@@ -112,7 +115,17 @@ public class PrestoFilterUtil {
             filter.add(carbondataColumnHandle.getColumnName()+"="+HIVE_DEFAULT_DYNAMIC_PARTITION);
           } else if (value instanceof Slice) {
             filter.add(carbondataColumnHandle.getColumnName()+"="+((Slice) value).toStringUtf8().toLowerCase());
-          } else if ((value instanceof Boolean) || (value instanceof Double)
+          } else if(value instanceof Long && carbondataColumnHandle.getColumnType().equals(DateType.DATE)){
+            Calendar c = Calendar.getInstance();
+            c.setTime(new java.sql.Date(0));
+            c.add(Calendar.DAY_OF_YEAR, (Integer)((Long) value).intValue());
+            java.sql.Date date = new java.sql.Date(c.getTime().getTime());
+            filter.add(carbondataColumnHandle.getColumnName()+"="+date.toString().toLowerCase());
+          }
+          else if(value instanceof Long && carbondataColumnHandle.getColumnType().equals(TimestampType.TIMESTAMP)){
+            filter.add(carbondataColumnHandle.getColumnName()+"="+new Timestamp((Long) value).toString().toLowerCase());
+          }
+          else if ((value instanceof Boolean) || (value instanceof Double)
               || (value instanceof Long)) {
             filter.add(carbondataColumnHandle.getColumnName()+"="+value.toString().toLowerCase());
           }
