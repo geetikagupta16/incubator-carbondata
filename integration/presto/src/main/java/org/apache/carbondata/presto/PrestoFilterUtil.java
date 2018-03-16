@@ -104,33 +104,32 @@ public class PrestoFilterUtil {
 
     for (ColumnHandle columnHandle : originalConstraint.getDomains().get().keySet()) {
       CarbondataColumnHandle carbondataColumnHandle = (CarbondataColumnHandle) columnHandle;
-      List<ColumnSchema> partitionedColumnSchema = columnSchemas.stream()
-          .filter(columnSchema -> carbondataColumnHandle.getColumnName().equals(columnSchema.getColumnName()))
-          .collect(toList());
+      List<ColumnSchema> partitionedColumnSchema = columnSchemas.stream().filter(
+          columnSchema -> carbondataColumnHandle.getColumnName().equals(columnSchema.getColumnName())).collect(toList());
       if (partitionedColumnSchema.size() != 0) {
         Domain domain = originalConstraint.getDomains().get().get(carbondataColumnHandle);
         if (domain != null && domain.isNullableSingleValue()) {
           Object value = domain.getNullableSingleValue();
           if (value == null) {
-            filter.add(carbondataColumnHandle.getColumnName()+"="+HIVE_DEFAULT_DYNAMIC_PARTITION);
+            filter.add(carbondataColumnHandle.getColumnName() + "=" + HIVE_DEFAULT_DYNAMIC_PARTITION);
           } else if (value instanceof Slice) {
-            filter.add(carbondataColumnHandle.getColumnName()+"="+((Slice) value).toStringUtf8().toLowerCase());
-          } else if(value instanceof Long && carbondataColumnHandle.getColumnType().equals(DateType.DATE)){
+            filter.add(carbondataColumnHandle.getColumnName() + "=" + ((Slice) value).toStringUtf8()
+                .toLowerCase());
+          } else if (value instanceof Long && carbondataColumnHandle.getColumnType()
+              .equals(DateType.DATE)) {
             Calendar c = Calendar.getInstance();
             c.setTime(new java.sql.Date(0));
-            c.add(Calendar.DAY_OF_YEAR, (Integer)((Long) value).intValue());
+            c.add(Calendar.DAY_OF_YEAR, (Integer) ((Long) value).intValue());
             java.sql.Date date = new java.sql.Date(c.getTime().getTime());
-            filter.add(carbondataColumnHandle.getColumnName()+"="+date.toString().toLowerCase());
+            filter.add(carbondataColumnHandle.getColumnName() + "=" + date.toString());
+          } else if (value instanceof Long && carbondataColumnHandle.getColumnType()
+              .equals(TimestampType.TIMESTAMP)) {
+            filter.add(carbondataColumnHandle.getColumnName() + "=" + new Timestamp((Long) value).toString());
+          } else if ((value instanceof Boolean) || (value instanceof Double)) {
+            filter.add(carbondataColumnHandle.getColumnName() + "=" + ((Slice) value).toStringUtf8());
+          } else {
+            filter.add(carbondataColumnHandle.getColumnName() + "=" + PARTITION_VALUE_WILDCARD);
           }
-          else if(value instanceof Long && carbondataColumnHandle.getColumnType().equals(TimestampType.TIMESTAMP)){
-            filter.add(carbondataColumnHandle.getColumnName()+"="+new Timestamp((Long) value).toString().toLowerCase());
-          }
-          else if ((value instanceof Boolean) || (value instanceof Double)
-              || (value instanceof Long)) {
-            filter.add(carbondataColumnHandle.getColumnName()+"="+value.toString().toLowerCase());
-          }
-        } else {
-          filter.add(carbondataColumnHandle.getColumnName()+"="+PARTITION_VALUE_WILDCARD);
         }
       }
     }
