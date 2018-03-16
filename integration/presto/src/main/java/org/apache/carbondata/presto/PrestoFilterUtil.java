@@ -113,8 +113,7 @@ public class PrestoFilterUtil {
           if (value == null) {
             filter.add(carbondataColumnHandle.getColumnName() + "=" + HIVE_DEFAULT_DYNAMIC_PARTITION);
           } else if (value instanceof Slice) {
-            filter.add(carbondataColumnHandle.getColumnName() + "=" + ((Slice) value).toStringUtf8()
-                .toLowerCase());
+            filter.add(carbondataColumnHandle.getColumnName() + "=" + ((Slice) value).toStringUtf8());
           } else if (value instanceof Long && carbondataColumnHandle.getColumnType()
               .equals(DateType.DATE)) {
             Calendar c = Calendar.getInstance();
@@ -126,7 +125,7 @@ public class PrestoFilterUtil {
               .equals(TimestampType.TIMESTAMP)) {
             filter.add(carbondataColumnHandle.getColumnName() + "=" + new Timestamp((Long) value).toString());
           } else if ((value instanceof Boolean) || (value instanceof Double) || (value instanceof Long)) {
-            filter.add(value.toString());
+            filter.add(carbondataColumnHandle.getColumnName() + "=" + value.toString());
           } else {
             filter.add(carbondataColumnHandle.getColumnName() + "=" + PARTITION_VALUE_WILDCARD);
           }
