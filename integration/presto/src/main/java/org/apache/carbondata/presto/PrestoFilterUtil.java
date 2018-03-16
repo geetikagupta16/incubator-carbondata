@@ -99,25 +99,25 @@ public class PrestoFilterUtil {
     final String HIVE_DEFAULT_DYNAMIC_PARTITION = "__HIVE_DEFAULT_PARTITION__";
     final String PARTITION_VALUE_WILDCARD = "";
 
-    for (ColumnHandle c : originalConstraint.getDomains().get().keySet()) {
-      CarbondataColumnHandle cdch = (CarbondataColumnHandle) c;
+    for (ColumnHandle columnHandle : originalConstraint.getDomains().get().keySet()) {
+      CarbondataColumnHandle carbondataColumnHandle = (CarbondataColumnHandle) columnHandle;
       List<ColumnSchema> partitionedColumnSchema = columnSchemas.stream()
-          .filter(columnSchema -> cdch.getColumnName().equals(columnSchema.getColumnName()))
+          .filter(columnSchema -> carbondataColumnHandle.getColumnName().equals(columnSchema.getColumnName()))
           .collect(toList());
       if (partitionedColumnSchema.size() != 0) {
-        Domain domain = originalConstraint.getDomains().get().get(cdch);
+        Domain domain = originalConstraint.getDomains().get().get(carbondataColumnHandle);
         if (domain != null && domain.isNullableSingleValue()) {
           Object value = domain.getNullableSingleValue();
           if (value == null) {
-            filter.add(cdch.getColumnName()+"="+HIVE_DEFAULT_DYNAMIC_PARTITION);
+            filter.add(carbondataColumnHandle.getColumnName()+"="+HIVE_DEFAULT_DYNAMIC_PARTITION);
           } else if (value instanceof Slice) {
-            filter.add(cdch.getColumnName()+"="+((Slice) value).toStringUtf8());
+            filter.add(carbondataColumnHandle.getColumnName()+"="+((Slice) value).toStringUtf8().toLowerCase());
           } else if ((value instanceof Boolean) || (value instanceof Double)
               || (value instanceof Long)) {
-            filter.add(cdch.getColumnName()+"="+value.toString());
+            filter.add(carbondataColumnHandle.getColumnName()+"="+value.toString().toLowerCase());
           }
         } else {
-          filter.add(cdch.getColumnName()+"="+PARTITION_VALUE_WILDCARD);
+          filter.add(carbondataColumnHandle.getColumnName()+"="+PARTITION_VALUE_WILDCARD);
         }
       }
     }
