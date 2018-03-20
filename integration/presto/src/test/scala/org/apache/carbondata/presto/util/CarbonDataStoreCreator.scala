@@ -24,6 +24,7 @@ import java.util
 import java.util.{ArrayList, Date, List, UUID}
 
 import scala.collection.JavaConversions._
+import scala.collection.immutable
 
 import com.google.gson.Gson
 import org.apache.hadoop.conf.Configuration
@@ -34,34 +35,27 @@ import org.apache.hadoop.mapreduce.task.TaskAttemptContextImpl
 import org.apache.hadoop.mapreduce.{RecordReader, TaskType}
 
 import org.apache.carbondata.common.logging.LogServiceFactory
-import org.apache.carbondata.core.cache.dictionary.{Dictionary, DictionaryColumnUniqueIdentifier,
-ReverseDictionary}
+import org.apache.carbondata.core.cache.dictionary.{Dictionary, DictionaryColumnUniqueIdentifier, ReverseDictionary}
 import org.apache.carbondata.core.cache.{Cache, CacheProvider, CacheType}
 import org.apache.carbondata.core.constants.CarbonCommonConstants
 import org.apache.carbondata.core.datastore.impl.FileFactory
-import org.apache.carbondata.core.fileoperations.{AtomicFileOperations, AtomicFileOperationsImpl,
-FileWriteOperation}
-import org.apache.carbondata.core.metadata.converter.{SchemaConverter,
-ThriftWrapperSchemaConverterImpl}
+import org.apache.carbondata.core.fileoperations.{AtomicFileOperations, AtomicFileOperationsImpl, FileWriteOperation}
+import org.apache.carbondata.core.metadata.converter.{SchemaConverter, ThriftWrapperSchemaConverterImpl}
 import org.apache.carbondata.core.metadata.datatype.DataTypes
 import org.apache.carbondata.core.metadata.encoder.Encoding
-import org.apache.carbondata.core.metadata.schema.table.column.{CarbonColumn, CarbonDimension,
-CarbonMeasure, ColumnSchema}
+import org.apache.carbondata.core.metadata.schema.partition.PartitionType
+import org.apache.carbondata.core.metadata.schema.table.column.{CarbonColumn, CarbonDimension, CarbonMeasure, ColumnSchema}
 import org.apache.carbondata.core.metadata.schema.table.{CarbonTable, TableInfo, TableSchema}
-import org.apache.carbondata.core.metadata.schema.{SchemaEvolution, SchemaEvolutionEntry}
-import org.apache.carbondata.core.metadata.{AbsoluteTableIdentifier, CarbonMetadata,
-CarbonTableIdentifier, ColumnIdentifier}
+import org.apache.carbondata.core.metadata.schema.{PartitionInfo, SchemaEvolution, SchemaEvolutionEntry}
+import org.apache.carbondata.core.metadata.{AbsoluteTableIdentifier, CarbonMetadata, CarbonTableIdentifier, ColumnIdentifier}
 import org.apache.carbondata.core.statusmanager.{LoadMetadataDetails, SegmentStatus}
 import org.apache.carbondata.core.util.path.CarbonTablePath
 import org.apache.carbondata.core.util.{CarbonProperties, CarbonUtil}
-import org.apache.carbondata.core.writer.sortindex.{CarbonDictionarySortIndexWriter,
-CarbonDictionarySortIndexWriterImpl, CarbonDictionarySortInfo, CarbonDictionarySortInfoPreparator}
-import org.apache.carbondata.core.writer.{CarbonDictionaryWriter, CarbonDictionaryWriterImpl,
-ThriftWriter}
+import org.apache.carbondata.core.writer.sortindex.{CarbonDictionarySortIndexWriter, CarbonDictionarySortIndexWriterImpl, CarbonDictionarySortInfo, CarbonDictionarySortInfoPreparator}
+import org.apache.carbondata.core.writer.{CarbonDictionaryWriter, CarbonDictionaryWriterImpl, ThriftWriter}
 import org.apache.carbondata.processing.loading.DataLoadExecutor
 import org.apache.carbondata.processing.loading.constants.DataLoadProcessorConstants
-import org.apache.carbondata.processing.loading.csvinput.{BlockDetails, CSVInputFormat,
-CSVRecordReaderIterator, StringArrayWritable}
+import org.apache.carbondata.processing.loading.csvinput.{BlockDetails, CSVInputFormat, CSVRecordReaderIterator, StringArrayWritable}
 import org.apache.carbondata.processing.loading.exception.CarbonDataLoadingException
 import org.apache.carbondata.processing.loading.model.{CarbonDataLoadSchema, CarbonLoadModel}
 import org.apache.carbondata.processing.util.TableOptionConstant
@@ -131,12 +125,13 @@ object CarbonDataStoreCreator {
         "true")
       loadModel.setMaxColumns("15")
       loadModel.setCsvHeader(
-        "ID,date,country,name,phonetype,serialname,salary,bonus,monthlyBonus,dob,shortField,isCurrentEmployee")
+        "ID,date,country,name,phonetype,serialname,salary,bonus,monthlyBonus,dob,shortField,isCurrentEmployee,partitionCol")
       loadModel.setCsvHeaderColumns(loadModel.getCsvHeader.split(","))
       loadModel.setTaskNo("0")
       loadModel.setSegmentId("0")
       loadModel.setFactTimeStamp(System.currentTimeMillis())
       loadModel.setMaxColumns("15")
+      loadModel.setPartitionLoad(true)
       executeGraph(loadModel, storePath)
     } catch {
       case e: Exception => e.printStackTrace()
@@ -309,8 +304,22 @@ object CarbonDataStoreCreator {
     isCurrentEmployee.setColumnUniqueId(UUID.randomUUID().toString)
     isCurrentEmployee.setDimensionColumn(false)
     isCurrentEmployee.setColumnGroup(11)
+    isCurrentEmployee.setSchemaOrdinal(11)
     isCurrentEmployee.setColumnReferenceId(isCurrentEmployee.getColumnUniqueId)
     columnSchemas.add(isCurrentEmployee)
+
+    //Add partition info to table schema
+    val partitionColSchema = new ColumnSchema()
+    partitionColSchema.setColumnName("partitionCol")
+    partitionColSchema.setDataType(DataTypes.INT)
+    partitionColSchema.setColumnar(true)
+    partitionColSchema.setEncodingList(new util.ArrayList[Encoding]())
+    partitionColSchema.setSchemaOrdinal(12)
+    partitionColSchema.setColumnUniqueId(UUID.randomUUID().toString)
+    partitionColSchema.setColumnReferenceId(partitionColSchema.getColumnUniqueId)
+    partitionColSchema.setDimensionColumn(false)
+    partitionColSchema.setColumnGroup(12)
+    columnSchemas.add(partitionColSchema)
 
     tableSchema.setListOfColumns(columnSchemas)
     val schemaEvol: SchemaEvolution = new SchemaEvolution()
@@ -321,6 +330,11 @@ object CarbonDataStoreCreator {
     tableInfo.setTableUniqueName(
       absoluteTableIdentifier.getCarbonTableIdentifier.getTableUniqueName
     )
+
+
+    val columnSchemasNew: util.List[ColumnSchema] = new util.ArrayList[ColumnSchema](){partitionColSchema}
+
+    tableSchema.setPartitionInfo(new PartitionInfo(columnSchemasNew, PartitionType.NATIVE_HIVE))
     tableInfo.setLastUpdatedTime(System.currentTimeMillis())
     tableInfo.setFactTable(tableSchema)
     val schemaFilePath: String = CarbonTablePath.getSchemaFilePath(
