@@ -465,19 +465,13 @@ public class CarbonTableReader {
     List<String> partitionValuesFromExpression =
         PrestoFilterUtil.getPartitionFilters(carbonTable, constraints);
 
-    List<List<String>> partitionSpecNamesList = partitionSpecs.stream().map(
-        PartitionSpec::getPartitions).collect(Collectors.toList());
+    List<PartitionSpec> partitionSpecList = partitionSpecs.stream().filter( partitionSpec -> partitionValuesFromExpression.contains(partitionSpec.getPartitions().get(0))).collect(Collectors.toList());
 
-    List<PartitionSpec> partitionSpecsList = new ArrayList(partitionSpecs);
+    prunePartitions.addAll(partitionSpecList);
 
-    for (int i = 0; i < partitionSpecNamesList.size(); i++) {
-      List<String> partitionSpecNames = partitionSpecNamesList.get(i);
-      if (partitionSpecNames.containsAll(partitionValuesFromExpression)) {
-        prunePartitions
-            .add(partitionSpecsList.get(i));
-      }
-    }
     return prunePartitions;
+
+
   }
 
   private CarbonTableInputFormat<Object>  createInputFormat( Configuration conf,
